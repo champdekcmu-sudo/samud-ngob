@@ -13,7 +13,7 @@ const countable = e => e.cat !== FIXED_CAT;
 const LS = 'slip-ledger-v1';
 const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
-const state = {expenses:[], periods:DEFAULT_PERIODS.map(p => ({...p})), sav:{...DEFAULT_SAV}};
+const state = {expenses:[], periods:DEFAULT_PERIODS.map(p => ({...p})), sav:{...DEFAULT_SAV}, settings:{autoSave:false}};
 
 function load(){
   try{
@@ -21,6 +21,7 @@ function load(){
     if(Array.isArray(s.expenses)) state.expenses = s.expenses;
     if(Array.isArray(s.periods) && s.periods.length) state.periods = s.periods;
     if(s.sav) state.sav = {...DEFAULT_SAV, ...s.sav};
+    if(s.settings) state.settings = s.settings;
   }catch(e){}
 }
 let askedPersist = false;
@@ -49,7 +50,14 @@ const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s||''));
 const newId = () => 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let toastT;
-function toast(msg){const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2800);}
+function toast(msg, undo){
+  const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT);
+  if(undo){
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = 'ยกเลิก'; b.className = 'toast-undo';
+    b.onclick = () => {t.hidden = true; undo();}; t.appendChild(b);
+  }
+  toastT = setTimeout(() => t.hidden = true, undo ? 7000 : 2800);
+}
 
 /* ---------- Daily budget ---------- */
 function currentPeriod(){
@@ -227,7 +235,7 @@ function findRecipient(lines){
 }
 function guessCat(text){
   const t = text.toLowerCase();
-  if(/grabfood|grab food|line ?man|lineman|foodpanda|robinhood|อาหาร|ข้าว|ก๋วยเตี๋ยว|กาแฟ|coffee|cafe|คาเฟ่|ชาบู|หมูกระทะ|bakery|เบเกอรี่|ส้มตำ|kfc|mcdonald|starbucks|amazon/i.test(t)) return 'อาหาร';
+  if(/grabfood|grab food|shopee ?food|line ?man|lineman|foodpanda|robinhood|อาหาร|ข้าว|ก๋วยเตี๋ยว|กาแฟ|coffee|cafe|คาเฟ่|ชาบู|หมูกระทะ|bakery|เบเกอรี่|ส้มตำ|kfc|mcdonald|starbucks|amazon/i.test(t)) return 'อาหาร';
   if(/บัตรเครดิต|credit card|ประกัน|insurance|\baia\b|หอพัก|ค่าเช่า|ค่าห้อง|apartment|อพาร์ท|\bais\b|true ?move|dtac|การไฟฟ้า|ไฟฟ้า|การประปา|ประปา|ผ่อน|สินเชื่อ|loan|internet|อินเทอร์เน็ต|3bb/i.test(t)) return FIXED_CAT;
   if(/grab|bolt|ปตท|\bptt\b|บางจาก|bangchak|shell|เชลล์|caltex|คาลเท็กซ์|\bbts\b|\bmrt\b|ทางด่วน|easy ?pass|m-?flow|แท็กซี่|taxi|ที่จอดรถ|parking|น้ำมัน/i.test(t)) return 'เดินทาง';
   if(/7-?eleven|เซเว่น|ซีพี ?ออลล์|cp ?all|lotus|โลตัส|big ?c|บิ๊กซี|makro|แม็คโคร|tops|shopee|lazada|ลาซาด้า|ช้อปปี้|family ?mart|watsons|boots|central|เซ็นทรัล|ห้าง/i.test(t)) return 'ของใช้';
@@ -335,9 +343,12 @@ function renderImport(){
       (!r.dateFound ? '<span class="badge warn">หาวันที่ไม่เจอ ใส่วันนี้ไว้ก่อน</span>' : '')+
       (!r.time ? '<span class="badge info">หาเวลาไม่เจอ ใส่เองได้</span>' : '')+
       (r.incoming ? '<span class="badge info">อาจเป็นเงินเข้า</span>' : '')+
-      (r.dup ? '<span class="badge warn">อาจซ้ำกับรายการที่จดแล้ว</span>' : '');
+      (r.kind === 'topup' ? '<span class="badge info">เติมเงินเข้า wallet ไม่นับเป็นรายจ่าย เพื่อไม่ให้นับซ้ำ</span>' : '')+
+      (r.kind === 'unknown' ? '<span class="badge warn">ไม่แน่ใจว่าเป็นรายจ่าย</span>' : '')+
+      (r.dup ? '<span class="badge warn">อาจซ้ำกับรายการที่จดแล้ว</span>' : '')+
+      (r.raw ? '<span class="badge info raw">'+esc(r.raw.slice(0,120))+'</span>' : '');
     return '<div class="imp-row'+(r.include ? '' : ' off')+'"><input type="checkbox" id="imp'+i+'-inc" data-ii="'+i+'" data-if="include" aria-label="เลือกรายการนี้"'+(r.include ? ' checked' : '')+'>'+
-      '<img alt="สลิป" src="'+r.thumb+'">'+
+      (r.thumb ? '<img alt="สลิป" src="'+r.thumb+'">' : '<div class="src">แจ้งเตือน'+(r.app ? '<br>'+esc(r.app) : '')+'</div>')+
       '<div class="imp-fields">'+
       '<div class="field"><label for="imp'+i+'-amount">จำนวนเงิน</label><input type="number" inputmode="decimal" step="0.01" id="imp'+i+'-amount" data-ii="'+i+'" data-if="amount" value="'+(r.amount || '')+'"></div>'+
       '<div class="field"><label for="imp'+i+'-date">วันที่</label><input type="date" id="imp'+i+'-date" data-ii="'+i+'" data-if="date" value="'+esc(r.date)+'"></div>'+
@@ -347,6 +358,7 @@ function renderImport(){
       (badges ? '<div class="badges">'+badges+'</div>' : '')+'</div></div>';
   }).join('');
   updateSaveBtn();
+  saveInbox();
 }
 function updateSaveBtn(){
   const n = importRows.filter(r => r.include && r.amount > 0).length;
@@ -364,18 +376,146 @@ $('impList').addEventListener('change', ev => {
   } else r[f] = t.value;
   updateSaveBtn();
 });
-$('impClear').addEventListener('click', () => {importRows.forEach(r => URL.revokeObjectURL(r.thumb)); importRows = []; $('impStatus').textContent = ''; renderImport();});
+$('impClear').addEventListener('click', () => {importRows.forEach(r => {if(r.thumb) URL.revokeObjectURL(r.thumb);}); importRows = []; $('impStatus').textContent = ''; renderImport();});
+function toEntry(r){
+  return {id:newId(), date:isDate(r.date) ? r.date : todayStr(), time:isTime(r.time) ? r.time : '', amount:r.amount,
+    cat:CATS.includes(r.cat) ? r.cat : 'อื่นๆ', note:String(r.note||'').slice(0,80), createdAt:Date.now(), source:r.src === 'text' ? 'notification' : 'slip'};
+}
 $('impSave').addEventListener('click', () => {
   const pick = importRows.filter(r => r.include && r.amount > 0);
   if(!pick.length) return;
-  pick.forEach(r => state.expenses.push({id:newId(), date:isDate(r.date) ? r.date : todayStr(), time:isTime(r.time) ? r.time : '', amount:r.amount,
-    cat:CATS.includes(r.cat) ? r.cat : 'อื่นๆ', note:String(r.note||'').slice(0,80), createdAt:Date.now(), source:'slip'}));
+  pick.forEach(r => state.expenses.push(toEntry(r)));
   if(!save()) return;
-  pick.forEach(r => {r.saved = true; URL.revokeObjectURL(r.thumb);});
+  pick.forEach(r => {r.saved = true; if(r.thumb) URL.revokeObjectURL(r.thumb);});
   importRows = importRows.filter(r => !r.saved);
   render(); renderImport(); $('impStatus').textContent = '';
   toast('บันทึก '+pick.length+' รายการแล้ว');
 });
+
+/* ---------- Bank and wallet notifications (K PLUS, Krungthai NEXT, เป๋าตัง, TrueMoney, ShopeePay) ---------- */
+const WALLET_NAMES = /truemoney|ทรูมันนี่|ทรูมันนี|shopee ?pay|ช้อปปี้ ?เพย์|เป๋าตัง|paotang|g-?wallet|วอลเล็ท/i;
+function noticeAmount(t){
+  const num = '(\\d{1,3}(?:,\\d{3})+(?:\\.\\d{1,2})?|\\d+(?:\\.\\d{1,2})?)';
+  const before = new RegExp('(?:฿|THB)\\s*'+num, 'i');
+  const after = new RegExp(num+'\\s*(?:บาท|บ\\.|THB|฿)', 'i');
+  const bare = /(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d+)\.(\d{2})(?![\d.])/;
+  // Ignore the balance that many banks add after the amount
+  const head = t.split(/ยอดเงินคงเหลือ|ยอดคงเหลือ|คงเหลือ|balance|available/i)[0];
+  for(const src of [head, t]){
+    for(const re of [after, before]){
+      const m = src.match(re);
+      if(m){const v = parseFloat(m[1].replace(/,/g,'')); if(v > 0) return Math.round(v*100)/100;}
+    }
+    const m = src.match(bare);
+    if(m){const v = parseFloat(m[1].replace(/,/g,'')+'.'+m[2]); if(v > 0) return v;}
+  }
+  return null;
+}
+function noticeKind(t){
+  const strongOut = /เงินออก|ชำระเงินสำเร็จ|จ่ายเงินสำเร็จ|ชำระค่า|หักบัญชี/i.test(t);
+  // Topping up a phone or a game is spending; topping up your own wallet is only moving money
+  const phoneTopup = /มือถือ|โทรศัพท์|\bais\b|dtac|ดีแทค|truemove|ทรูมูฟ|เกม|game/i.test(t);
+  if(/เติมเงิน|top ?-?up/i.test(t) && !phoneTopup && (WALLET_NAMES.test(t) || /เข้า/.test(t)) && !/ชำระ|จ่าย|ซื้อ/i.test(t)) return 'topup';
+  if(/โอน|transfer/i.test(t) && WALLET_NAMES.test(t) && !/ชำระ|จ่าย|ซื้อ|สแกน/i.test(t)) return 'topup';
+  const out = /เงินออก|ชำระ|จ่าย|โอนเงิน|โอนออก|ถอน|หักบัญชี|ซื้อ|สแกน|payment|paid|spent|debit/i.test(t) || (phoneTopup && /เติมเงิน|top ?-?up/i.test(t));
+  const inn = /เงินเข้า|รับเงิน|ได้รับเงิน|เงินโอนเข้า|คืนเงิน|refund|received|cashback/i.test(t);
+  if(out && (!inn || strongOut)) return 'out';
+  if(inn) return 'in';
+  return 'unknown';
+}
+function noticeMerchant(t){
+  const m = t.match(/(?:ร้านค้า|ร้าน|ให้กับ|ไปยัง|ไปที่|ผู้รับ|ที่|ให้|ถึง|merchant|to|at)\s*:?\s*([^\n,;:()฿|]{2,40}?)(?=\s*(?:จำนวน|ยอด|เมื่อ|วันที่|เวลา|ด้วย|ผ่าน|สำเร็จ|amount|[\d,]+(?:\.\d+)?\s*(?:บาท|฿)|฿|\d{1,2}\/\d{1,2}|$|[,;]))/i);
+  const name = m ? m[1].trim() : '';
+  return /^[\d\s.-]+$/.test(name) ? '' : name;
+}
+function textChunks(t){
+  const out = [];
+  String(t||'').split(/\n\s*\n/).forEach(block => {
+    const lines = block.split('\n').map(s => s.trim()).filter(Boolean);
+    const withAmt = lines.filter(l => noticeAmount(l));
+    if(withAmt.length > 1) lines.forEach(l => out.push(l)); else if(lines.length) out.push(lines.join(' '));
+  });
+  return out;
+}
+function noticeRows(text, app){
+  const rows = [];
+  for(const chunk of textChunks(text)){
+    const amount = noticeAmount(chunk); if(!amount) continue;
+    const kind = noticeKind(chunk);
+    const date = findDate(chunk);
+    const r = {src:'text', app:String(app||'').slice(0,30), raw:chunk.slice(0,300), amount, date:date || todayStr(), dateFound:true,
+      time:findTime([chunk]) || nowTime(), cat:guessCat(chunk+' '+(app||'')), note:(noticeMerchant(chunk) || app || '').slice(0,80), kind, incoming:kind === 'in'};
+    r.dup = isDup(r);
+    r.include = kind === 'out' && !r.dup;
+    rows.push(r);
+  }
+  return rows;
+}
+function receiveText(text, app, how){
+  const rows = noticeRows(text, app);
+  if(!rows.length){toast('ไม่พบจำนวนเงินในข้อความ'); return 0;}
+  const auto = state.settings && state.settings.autoSave;
+  const autoRows = auto ? rows.filter(r => r.include) : [];
+  const rest = rows.filter(r => !autoRows.includes(r));
+  if(autoRows.length){
+    const added = autoRows.map(toEntry);
+    added.forEach(e => state.expenses.push(e));
+    if(save()){
+      render();
+      toast('บันทึกอัตโนมัติ '+added.map(e => fmt(e.amount)).join(', ')+' บาท', () => {
+        const ids = new Set(added.map(e => e.id));
+        state.expenses = state.expenses.filter(e => !ids.has(e.id)); save(); render(); toast('ยกเลิกแล้ว');
+      });
+    }
+  }
+  if(rest.length){
+    importRows = importRows.concat(rest); renderImport();
+    $('impSection').scrollIntoView({behavior:'smooth', block:'start'});
+    if(!autoRows.length) toast((how === 'notification' ? 'ได้รับแจ้งเตือน ' : 'แยกได้ ')+rest.length+' รายการ ตรวจแล้วกดบันทึก');
+  }
+  return rows.length;
+}
+function seenRecently(key){
+  try{
+    const now = Date.now();
+    const list = JSON.parse(localStorage.getItem('slip-ledger-seen') || '[]').filter(x => now-x.t < 10*60*1000);
+    const hit = list.some(x => x.k === key);
+    if(!hit) list.push({k:key, t:now});
+    localStorage.setItem('slip-ledger-seen', JSON.stringify(list.slice(-50)));
+    return hit;
+  }catch(e){return false;}
+}
+function handleHash(){
+  const h = location.hash;
+  if(!h.startsWith('#n=')) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  if(seenRecently(h)) return;
+  let body = h.slice(3);
+  try{body = decodeURIComponent(body.replace(/\+/g,' '));}catch(e){}
+  const bar = body.indexOf('|');
+  const app = bar >= 0 ? body.slice(0, bar).trim() : '';
+  const text = bar >= 0 ? body.slice(bar+1) : body;
+  receiveText(text, app, 'notification');
+}
+window.addEventListener('hashchange', handleHash);
+$('noticeParse').addEventListener('click', () => {
+  const t = $('noticeText').value.trim();
+  if(!t){toast('วางข้อความแจ้งเตือนหรือ SMS ก่อน'); return;}
+  if(receiveText(t, '', 'paste')) $('noticeText').value = '';
+});
+$('autoSave').addEventListener('change', () => {
+  state.settings = {...(state.settings||{}), autoSave:$('autoSave').checked}; save();
+  toast($('autoSave').checked ? 'เปิดบันทึกอัตโนมัติแล้ว' : 'ปิดบันทึกอัตโนมัติแล้ว');
+});
+function saveInbox(){
+  try{localStorage.setItem('slip-ledger-inbox', JSON.stringify(importRows.filter(r => r.src === 'text')));}catch(e){}
+}
+function loadInbox(){
+  try{
+    const rows = JSON.parse(localStorage.getItem('slip-ledger-inbox') || '[]');
+    if(Array.isArray(rows)) importRows = rows.filter(r => r && r.amount >= 0).map(r => ({...r, dup:isDup(r)}));
+  }catch(e){}
+}
 
 /* Slips shared from other apps (Android share sheet) */
 async function takeShared(){
@@ -384,15 +524,22 @@ async function takeShared(){
     const c = await caches.open('shared-slips');
     const keys = await c.keys();
     if(!keys.length) return;
-    const files = [];
+    const files = [], texts = [];
     for(const k of keys){
       const r = await c.match(k);
-      if(r){const b = await r.blob(); files.push(new File([b], 'slip', {type:b.type || 'image/jpeg'}));}
+      if(r){
+        const b = await r.blob();
+        if((b.type||'').indexOf('text/') === 0) texts.push(await b.text());
+        else files.push(new File([b], 'slip', {type:b.type || 'image/jpeg'}));
+      }
       await c.delete(k);
     }
-    addPicked(files);
-    $('impSection').scrollIntoView({behavior:'smooth', block:'start'});
-    toast('รับรูปสลิป '+files.length+' รูปแล้ว กด "อ่านสลิป"');
+    texts.forEach(t => receiveText(t, '', 'share'));
+    if(files.length){
+      addPicked(files);
+      $('impSection').scrollIntoView({behavior:'smooth', block:'start'});
+      toast('รับรูปสลิป '+files.length+' รูปแล้ว กด "อ่านสลิป"');
+    }
   }catch(e){}
   if(location.search) history.replaceState(null, '', location.pathname);
 }
@@ -518,6 +665,9 @@ if('serviceWorker' in navigator && location.protocol !== 'file:'){
 
 /* ---------- Start ---------- */
 load();
-renderPeriods(); fillSavInputs(); renderSav(); render(); updatePicked();
+loadInbox();
+$('autoSave').checked = !!(state.settings && state.settings.autoSave);
+renderPeriods(); fillSavInputs(); renderSav(); render(); updatePicked(); renderImport();
 takeShared();
+handleHash();
 document.addEventListener('visibilitychange', () => {if(!document.hidden) render();});

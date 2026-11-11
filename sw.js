@@ -1,5 +1,5 @@
 // Offline cache for the app shell, plus the Android "Share" target for slip images.
-const CACHE = 'slip-ledger-v2';
+const CACHE = 'slip-ledger-v3';
 const SHARED = 'shared-slips';
 const SHELL = ['./', './index.html', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
@@ -26,6 +26,11 @@ self.addEventListener('fetch', e => {
         const form = await e.request.formData();
         const cache = await caches.open(SHARED);
         let i = 0;
+        const words = [form.get('title'), form.get('text')].filter(s => typeof s === 'string' && s.trim()).join('\n');
+        if (words) {
+          await cache.put(new URL('shared/text-' + Date.now(), self.registration.scope).href,
+            new Response(words, {headers: {'Content-Type': 'text/plain; charset=utf-8'}}));
+        }
         for (const f of form.getAll('slips')) {
           if (f && f.type && f.type.startsWith('image/')) {
             await cache.put(new URL('shared/' + Date.now() + '-' + (i++), self.registration.scope).href,
