@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>สมุดงบรายวัน</title>
+<meta name="theme-color" content="#1c6a61">
+<meta name="description" content="จดรายจ่ายรายวัน อ่านสลิปโอนเงิน และวางแผนออมเงิน">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+/* Layout: one ledger column. Today's allowance first, quick entry, slip import, the period's day bars, entries, then settings, savings plan and backup. */
+:root{
+  --bg:#f2f5f4; --surface:#ffffff; --line:#d5dfdc; --fg:#16201e; --muted:#5a6a66;
+  --accent:#1c6a61; --accent-soft:#e0eeeb; --on-accent:#ffffff;
+  --good:#2c7a3c; --warn:#a96400; --bad:#b0352b; --bar:#93c0b8; --future:#e6ecea;
+  --display:"Bai Jamjuree","IBM Plex Sans Thai",system-ui,sans-serif;
+  --body:"IBM Plex Sans Thai","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0f1514; --surface:#172020; --line:#2a3634; --fg:#e3ebe9; --muted:#97a8a4;
+  --accent:#5dbbad; --accent-soft:#1b2d2a; --on-accent:#0b1413;
+  --good:#6cc37c; --warn:#e2a349; --bad:#f07a6f; --bar:#3e726a; --future:#1f2a28; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:760px;margin:0 auto;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:24px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;line-height:1.25}
+h1{font-size:1.8rem;font-weight:700}
+h2{font-size:1.3rem;font-weight:600}
+h3{font-size:1.05rem;font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+.eyebrow{font-size:.78rem;letter-spacing:.04em;color:var(--muted);font-weight:600}
+header{display:flex;flex-direction:column;gap:6px}
+.head-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.note{font-size:.85rem;color:var(--muted)}
+.note.warn{color:var(--warn)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.today{border-color:var(--accent)}
+.today-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.big{font-family:var(--display);font-size:3rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:1.1rem;font-weight:500;color:var(--muted);margin-left:6px}
+.pill{display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;font-size:.85rem;font-weight:600;border:1px solid currentColor}
+.pill.good{color:var(--good)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;border-top:1px solid var(--line);padding-top:14px}
+.stat{display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat b{font-family:var(--display);font-size:1.25rem;font-weight:600;font-variant-numeric:tabular-nums}
+.stat span{font-size:.8rem;color:var(--muted)}
+form{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.field{display:flex;flex-direction:column;gap:4px;flex:1 1 140px;min-width:0}
+.field label,.lbl{font-size:.82rem;color:var(--muted);font-weight:500}
+input[type=text],input[type=number],input[type=date],select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+input:focus-visible,button:focus-visible,select:focus-visible,.chip input:focus-visible+span,.pickbtn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+#amount{font-family:var(--display);font-size:1.4rem;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.chip span{display:inline-block;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--bg);font-size:.9rem;cursor:pointer}
+.chip input:checked+span{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);padding:9px 14px}
+button.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600;padding:12px 18px}
+button.link{background:none;border:none;color:var(--muted);padding:4px 6px;font-size:.85rem}
+button.link.confirm{color:var(--bad);font-weight:600}
+button:disabled{opacity:.5;cursor:not-allowed}
+.pickbtn{position:relative;display:inline-flex;align-items:center;justify-content:center;padding:14px 20px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-weight:600;cursor:pointer;overflow:hidden}
+.pickbtn input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px}
+.thumbs img{width:64px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.progress{height:8px;border-radius:999px;background:var(--future);overflow:hidden}
+.progress div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.chart{overflow-x:auto}
+.chart svg{display:block;min-width:520px;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.day{display:flex;flex-direction:column;gap:2px}
+.day-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);padding:8px 0 4px;border-bottom:1px solid var(--line)}
+.entry{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;padding:6px 0}
+.entry .tag{font-size:.75rem;padding:2px 8px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+.entry .what{min-width:0;overflow-wrap:anywhere}
+.entry .amt{font-variant-numeric:tabular-nums;font-weight:600}
+.entry.fixed .tag{background:var(--future);color:var(--muted)}
+.entry.fixed .amt{color:var(--muted);font-weight:500}
+.empty{padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);text-align:center}
+.imp-list{display:flex;flex-direction:column;gap:10px}
+.imp-row{display:grid;grid-template-columns:auto 64px 1fr;gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px;align-items:start}
+.imp-row.off{opacity:.55}
+.imp-row input[type=checkbox]{width:22px;height:22px;margin-top:4px;accent-color:var(--accent)}
+.imp-row img{width:64px;height:96px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.imp-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;min-width:0}
+.imp-fields .wide{grid-column:1/-1}
+.badges{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}
+.badge{font-size:.75rem;padding:2px 8px;border-radius:6px;border:1px solid currentColor}
+.badge.warn{color:var(--warn)} .badge.info{color:var(--muted)}
+details summary{cursor:pointer;font-weight:600;font-family:var(--display)}
+.ptable{overflow-x:auto}
+.ptable table{border-collapse:collapse;width:100%;min-width:520px}
+.ptable td,.ptable th{padding:6px;text-align:left;font-size:.85rem}
+.ptable th{color:var(--muted);font-weight:500}
+.sav-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.alloc{display:flex;height:22px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.alloc div{height:100%}
+.mile{width:100%;border-collapse:collapse}
+.mile td,.mile th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;font-size:.9rem}
+.mile th{color:var(--muted);font-weight:500;font-size:.8rem}
+.mile td:last-child,.mile th:last-child{text-align:right}
+.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.tips li.bad{color:var(--bad)} .tips li.warn{color:var(--warn)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.9rem;max-width:calc(100% - 32px);z-index:20}
+@media (max-width:480px){.big{font-size:2.5rem}.stats{grid-template-columns:1fr 1fr}.stats .stat:last-child{grid-column:span 2}.imp-row{grid-template-columns:auto 1fr}.imp-row img{grid-column:2;width:96px;height:140px}.imp-row .imp-fields{grid-column:1/-1}}
+@media (prefers-reduced-motion:reduce){.progress div{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="head-row">
+      <p class="eyebrow" id="periodName">งบรอบปัจจุบัน</p>
+      <button type="button" id="installBtn" hidden>ติดตั้งลงหน้าจอ</button>
+    </div>
+    <h1>สมุดงบรายวัน</h1>
+    <p class="note">ข้อมูลเก็บไว้ในมือถือเครื่องนี้ สำรองเป็นไฟล์ได้ที่ด้านล่างสุด</p>
+  </header>
+
+  <section class="panel today" aria-labelledby="todayH">
+    <div class="today-top">
+      <div>
+        <p id="todayH" class="lbl" style="font-size:.9rem">วันนี้ยังใช้ได้อีก</p>
+        <div class="big" id="leftToday">0<small>บาท</small></div>
+      </div>
+      <span class="pill good" id="statusPill">อยู่ในงบ</span>
+    </div>
+    <p class="muted num" id="todayLine"></p>
+    <div class="stats">
+      <div class="stat"><b id="sRemain">0</b><span>เหลือทั้งรอบ (บาท)</span></div>
+      <div class="stat"><b id="sDays">0</b><span>วันที่เหลือ รวมวันนี้</span></div>
+      <div class="stat"><b id="sSpent">0</b><span>ใช้ไปแล้ว (บาท)</span></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="addH">
+    <h2 id="addH">จดรายจ่าย</h2>
+    <form id="addForm" novalidate>
+      <div class="row">
+        <div class="field"><label for="amount">จำนวนเงิน (บาท)</label><input id="amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0"></div>
+        <div class="field"><label for="date">วันที่</label><input id="date" type="date"></div>
+      </div>
+      <div class="field"><span class="lbl">หมวด</span>
+        <div class="chips" role="radiogroup" aria-label="หมวด" id="catChips"></div>
+        <p class="note">"ค่าใช้จ่ายประจำ" เช่น ค่าห้อง บัตรเครดิต ประกัน ค่าโทรศัพท์ จะถูกจดไว้แต่ไม่นับในงบรายวัน</p>
+      </div>
+      <div class="field"><label for="note">รายละเอียด (ไม่ใส่ก็ได้)</label><input id="note" type="text" maxlength="80" placeholder="เช่น ข้าวกลางวัน"></div>
+      <div><button class="primary" type="submit">บันทึกรายจ่าย</button></div>
+    </form>
+  </section>
+
+  <section class="panel" aria-labelledby="impH" id="impSection">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <h2 id="impH">นำเข้าจากสลิปโอนเงิน</h2>
+      <p class="muted">เลือกรูปสลิป หรือกด "แชร์" รูปสลิปจากแอปธนาคารหรือแกลเลอรีมาที่แอปนี้ แอปจะอ่านจำนวนเงินและวันที่ให้ ตรวจและแก้ได้ก่อนบันทึก</p>
+    </div>
+    <div class="row">
+      <label class="pickbtn">เลือกรูปสลิป<input id="slipFile" type="file" accept="image/*" multiple aria-label="เลือกรูปสลิป"></label>
+      <button type="button" class="link" id="pickClear" hidden>ล้างรูปที่เลือก</button>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+    <p class="note" id="pickNote">ยังไม่ได้เลือกรูป</p>
+    <div><button type="button" class="primary" id="impRead" disabled>อ่านสลิป</button></div>
+    <div class="progress" id="impProg" hidden><div></div></div>
+    <p class="note" id="impStatus" aria-live="polite"></p>
+    <div class="imp-list" id="impList"></div>
+    <div class="row" id="impActions" hidden><button type="button" class="primary" id="impSave">บันทึกรายการที่เลือก</button><button type="button" id="impClear">ล้างผลการอ่าน</button></div>
+    <p class="note">การอ่านสลิปทำบนมือถือของคุณ รูปไม่ถูกส่งไปที่ไหน ครั้งแรกต้องดาวน์โหลดข้อมูลภาษาไทยประมาณ 10 MB แนะนำให้ใช้ Wi-Fi</p>
+  </section>
+
+  <section class="panel" aria-labelledby="chartH">
+    <h2 id="chartH">ใช้ไปแต่ละวันในรอบนี้</h2>
+    <div class="chart" id="chart"></div>
+    <div class="legend"><span><i style="background:var(--bar)"></i>อยู่ในงบเฉลี่ย</span><span><i style="background:var(--warn)"></i>เกินงบเฉลี่ย</span><span><i style="background:var(--future)"></i>วันที่ยังไม่ถึง</span></div>
+  </section>
+
+  <section class="panel" aria-labelledby="listH">
+    <h2 id="listH">รายการในรอบนี้</h2>
+    <div id="list"></div>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>ตั้งค่ารอบงบ</summary>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
+        <p class="note">งบแต่ละรอบคือเงินสำหรับกินและใช้จ่ายรายวัน หลังหักบัตรเครดิตและค่าใช้จ่ายประจำแล้ว</p>
+        <div class="ptable"><table><thead><tr><th>ชื่อรอบ</th><th>เริ่ม</th><th>สิ้นสุด</th><th>งบ (บาท)</th><th></th></tr></thead><tbody id="pBody"></tbody></table></div>
+        <div class="row"><button type="button" id="pAdd">เพิ่มรอบถัดไป</button><button type="button" class="primary" id="pSave">บันทึกการตั้งค่า</button></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel" aria-labelledby="savH">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <p class="eyebrow">ระยะยาว ตั้งแต่ ม.ค. 2570</p>
+      <h2 id="savH">แผนออมเงินสำรองฉุกเฉิน</h2>
+      <p class="muted">ตัวเลขตั้งต้นมาจากรายรับรายจ่ายของคุณ แก้ได้ทุกช่อง</p>
+    </div>
+    <div class="sav-grid">
+      <div class="field"><label for="sv-income">เงินเดือน / เดือน</label><input id="sv-income" type="number" inputmode="decimal" data-k="income"></div>
+      <div class="field"><label for="sv-car">ค่าเช่ารถ / เดือน</label><input id="sv-car" type="number" inputmode="decimal" data-k="car"></div>
+      <div class="field"><label for="sv-fixed">ค่าใช้จ่ายประจำ / เดือน</label><input id="sv-fixed" type="number" inputmode="decimal" data-k="fixed"></div>
+      <div class="field"><label for="sv-food">ค่ากินใช้ / วัน</label><input id="sv-food" type="number" inputmode="decimal" data-k="food"></div>
+      <div class="field"><label for="sv-other">บัตรเครดิตและอื่นๆ / เดือน</label><input id="sv-other" type="number" inputmode="decimal" data-k="other"></div>
+      <div class="field"><label for="sv-saving">ออมเดือนละ</label><input id="sv-saving" type="number" inputmode="decimal" data-k="saving"></div>
+      <div class="field"><label for="sv-current">เงินออมตอนเริ่ม</label><input id="sv-current" type="number" inputmode="decimal" data-k="current"></div>
+      <div class="field"><label for="sv-months">เป้าเงินสำรอง (กี่เดือน)</label><input id="sv-months" type="number" inputmode="numeric" min="1" max="12" data-k="months"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <h3>เงินแต่ละเดือนไปไหน</h3>
+      <div class="alloc" id="alloc" role="img" aria-label="สัดส่วนการใช้เงินต่อเดือน"></div>
+      <div class="legend" id="allocLegend"></div>
+    </div>
+    <div class="stats" style="border-top:none;padding-top:0">
+      <div class="stat"><b id="svTarget">0</b><span>เป้าเงินสำรอง (บาท)</span></div>
+      <div class="stat"><b id="svWhen">-</b><span>ถึงเป้าเมื่อ</span></div>
+      <div class="stat"><b id="svRate">0%</b><span>เงินออมต่อรายได้</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <h3>เงินออมสะสม 24 เดือน</h3>
+      <div class="chart" id="savChart"></div>
+    </div>
+    <div style="overflow-x:auto"><table class="mile"><thead><tr><th>เป้าหมาย</th><th>จำนวน</th><th>ถึงเมื่อ</th></tr></thead><tbody id="mileBody"></tbody></table></div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <h3>ข้อแนะนำจากตัวเลขตอนนี้</h3>
+      <ul class="tips" id="tips"></ul>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="bakH">
+    <h2 id="bakH">สำรองข้อมูล</h2>
+    <p class="muted">ข้อมูลอยู่ในมือถือเครื่องนี้เท่านั้น ถ้าล้างข้อมูล Chrome หรือเปลี่ยนเครื่อง ข้อมูลจะหาย ควรสำรองเป็นไฟล์เดือนละครั้ง</p>
+    <div class="row">
+      <button type="button" class="primary" id="exportBtn">ดาวน์โหลดไฟล์สำรอง</button>
+      <label class="pickbtn" style="background:var(--bg);color:var(--fg);border:1px solid var(--line);padding:11px 16px;font-weight:500">นำเข้าไฟล์สำรอง<input id="importFile" type="file" accept="application/json,.json" aria-label="นำเข้าไฟล์สำรอง"></label>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
