@@ -38,6 +38,9 @@ const fmt = n => (Math.round(n*100)/100).toLocaleString('th-TH',{maximumFraction
 const fmt0 = n => Math.round(n).toLocaleString('th-TH');
 const pad = n => String(n).padStart(2,'0');
 const todayStr = () => {const d = new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
+const nowTime = () => {const d = new Date(); return pad(d.getHours())+':'+pad(d.getMinutes());};
+const isTime = s => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(s||''));
+const byWhen = (a,b) => (b.time||'').localeCompare(a.time||'') || (b.createdAt||0)-(a.createdAt||0);
 const dnum = s => {const [y,m,d] = String(s).split('-').map(Number); return Math.round(Date.UTC(y,m-1,d)/864e5);};
 const fromNum = n => new Date(n*864e5).toISOString().slice(0,10);
 const fmtD = s => {const [,m,d] = s.split('-').map(Number); return d+' '+TH_M[m-1];};
@@ -119,10 +122,10 @@ function renderList(inP){
   if(!inP.length){el.innerHTML = '<div class="empty">ยังไม่มีรายจ่ายในรอบนี้ จดเองจากช่อง "จดรายจ่าย" หรือนำเข้าจากสลิปได้</div>'; return;}
   const groups = {}; inP.forEach(e => (groups[e.date] = groups[e.date] || []).push(e));
   el.innerHTML = Object.keys(groups).sort().reverse().map(d => {
-    const items = groups[d].sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
+    const items = groups[d].sort(byWhen);
     const fixedSum = sum(items.filter(e => !countable(e)));
     return '<div class="day"><div class="day-head"><span>'+esc(fmtD(d))+'</span><span class="num">นับงบ '+fmt(sum(items.filter(countable)))+' บาท'+(fixedSum ? ' · ประจำ '+fmt(fixedSum) : '')+'</span></div>'+
-      items.map(e => '<div class="entry'+(countable(e) ? '' : ' fixed')+'"><span class="tag">'+esc(e.cat||'อื่นๆ')+'</span><span class="what">'+esc(e.note||'')+'</span><span class="amt">'+fmt(e.amount)+'</span>'+
+      items.map(e => '<div class="entry'+(countable(e) ? '' : ' fixed')+'"><span class="tag">'+esc(e.cat||'อื่นๆ')+'</span><span class="what">'+(isTime(e.time) ? '<span class="t">'+esc(e.time)+'</span>' : '')+esc(e.note||'')+'</span><span class="amt">'+fmt(e.amount)+'</span>'+
         '<button type="button" class="link'+(pendingDel.has(e.id) ? ' confirm' : '')+'" data-del="'+esc(e.id)+'">'+(pendingDel.has(e.id) ? 'ยืนยันลบ' : 'ลบ')+'</button></div>').join('')+'</div>';
   }).join('');
 }
@@ -139,14 +142,15 @@ $('list').addEventListener('click', ev => {
 /* ---------- Manual entry ---------- */
 $('catChips').innerHTML = CATS.map((c,i) => '<label class="chip"><input type="radio" name="cat" id="cat-'+i+'" value="'+esc(c)+'"'+(i === 0 ? ' checked' : '')+'><span>'+esc(c)+'</span></label>').join('');
 $('date').value = todayStr();
+$('time').value = nowTime();
 $('addForm').addEventListener('submit', ev => {
   ev.preventDefault();
   const amount = parseFloat($('amount').value);
   if(!(amount > 0)){toast('ใส่จำนวนเงินที่มากกว่า 0'); $('amount').focus(); return;}
-  const entry = {id:newId(), date:$('date').value || todayStr(), amount:Math.round(amount*100)/100,
+  const entry = {id:newId(), date:$('date').value || todayStr(), time:isTime($('time').value) ? $('time').value : '', amount:Math.round(amount*100)/100,
     cat:document.querySelector('input[name=cat]:checked').value, note:$('note').value.trim(), createdAt:Date.now()};
   state.expenses.push(entry);
-  if(save()){$('amount').value = ''; $('note').value = ''; render(); toast('บันทึกแล้ว '+fmt(entry.amount)+' บาท');}
+  if(save()){$('amount').value = ''; $('note').value = ''; $('time').value = nowTime(); render(); toast('บันทึกแล้ว '+fmt(entry.amount)+' บาท');}
 });
 
 /* ---------- Slip reading (on-device OCR) ---------- */
@@ -229,12 +233,26 @@ function guessCat(text){
   if(/7-?eleven|เซเว่น|ซีพี ?ออลล์|cp ?all|lotus|โลตัส|big ?c|บิ๊กซี|makro|แม็คโคร|tops|shopee|lazada|ลาซาด้า|ช้อปปี้|family ?mart|watsons|boots|central|เซ็นทรัล|ห้าง/i.test(t)) return 'ของใช้';
   return 'อื่นๆ';
 }
+function findTime(lines){
+  // Prefer a time on the same line as the date, e.g. "10 พ.ย. 69 14:32 น." or "10 Nov 2026 - 14:32"
+  const colon = /(?<![\d:])([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)(?::[0-5]\d)?(?![\d])/;
+  const dotNa = /(?<![\d.])([01]?\d|2[0-3])\.([0-5]\d)\s*น/;
+  const skip = /เลขที่|รหัส|ref|อ้างอิง|บัญชี|account/i;
+  const ordered = [...lines.filter(l => /\d{1,2}\s*[ก-๙A-Za-z.]{2,12}\s*\d{2,4}|\d{1,2}\/\d{1,2}\/\d{2,4}/.test(l)), ...lines];
+  for(const l of ordered){
+    if(skip.test(l)) continue;
+    const m = l.match(colon) || l.match(dotNa);
+    if(m) return pad(Number(m[1]))+':'+m[2];
+  }
+  return '';
+}
 function parseSlip(raw){
   const lines = raw.split(/\n+/).map(s => s.replace(/[ \t]+/g,' ').trim()).filter(Boolean);
   const amount = findAmount(lines);
   const date = findDate(raw);
+  const time = findTime(lines);
   const incoming = /รับเงิน|เงินเข้า|received|ได้รับ/i.test(raw) && !/โอนเงินสำเร็จ|ชำระเงินสำเร็จ|จ่ายบิล/i.test(raw);
-  return {amount, date:date || todayStr(), dateFound:!!date, cat:guessCat(raw), note:findRecipient(lines).slice(0,80), incoming};
+  return {amount, date:date || todayStr(), dateFound:!!date, time, cat:guessCat(raw), note:findRecipient(lines).slice(0,80), incoming};
 }
 
 let tessPromise = null, worker = null, progressCb = null;
@@ -268,7 +286,8 @@ $('slipFile').addEventListener('change', () => {addPicked([...($('slipFile').fil
 $('pickClear').addEventListener('click', () => {picked.forEach(p => URL.revokeObjectURL(p.url)); picked = []; updatePicked();});
 
 function setProg(frac){const bar = $('impProg'); bar.hidden = frac == null; if(frac != null) bar.firstElementChild.style.width = Math.round(frac*100)+'%';}
-const isDup = r => state.expenses.some(e => e.date === r.date && Math.abs((Number(e.amount)||0)-r.amount) < 0.005);
+const isDup = r => state.expenses.some(e => e.date === r.date && Math.abs((Number(e.amount)||0)-r.amount) < 0.005 &&
+  (!isTime(e.time) || !isTime(r.time) || e.time === r.time));
 
 $('impRead').addEventListener('click', async () => {
   if(!picked.length) return;
@@ -314,6 +333,7 @@ function renderImport(){
     const opts = CATS.map(c => '<option'+(c === r.cat ? ' selected' : '')+'>'+esc(c)+'</option>').join('');
     const badges = (r.missing ? '<span class="badge warn">หาจำนวนเงินไม่เจอ กรอกเองแล้วติ๊กเลือก</span>' : '')+
       (!r.dateFound ? '<span class="badge warn">หาวันที่ไม่เจอ ใส่วันนี้ไว้ก่อน</span>' : '')+
+      (!r.time ? '<span class="badge info">หาเวลาไม่เจอ ใส่เองได้</span>' : '')+
       (r.incoming ? '<span class="badge info">อาจเป็นเงินเข้า</span>' : '')+
       (r.dup ? '<span class="badge warn">อาจซ้ำกับรายการที่จดแล้ว</span>' : '');
     return '<div class="imp-row'+(r.include ? '' : ' off')+'"><input type="checkbox" id="imp'+i+'-inc" data-ii="'+i+'" data-if="include" aria-label="เลือกรายการนี้"'+(r.include ? ' checked' : '')+'>'+
@@ -321,6 +341,7 @@ function renderImport(){
       '<div class="imp-fields">'+
       '<div class="field"><label for="imp'+i+'-amount">จำนวนเงิน</label><input type="number" inputmode="decimal" step="0.01" id="imp'+i+'-amount" data-ii="'+i+'" data-if="amount" value="'+(r.amount || '')+'"></div>'+
       '<div class="field"><label for="imp'+i+'-date">วันที่</label><input type="date" id="imp'+i+'-date" data-ii="'+i+'" data-if="date" value="'+esc(r.date)+'"></div>'+
+      '<div class="field"><label for="imp'+i+'-time">เวลา</label><input type="time" id="imp'+i+'-time" data-ii="'+i+'" data-if="time" value="'+esc(r.time||'')+'"></div>'+
       '<div class="field"><label for="imp'+i+'-cat">หมวด</label><select id="imp'+i+'-cat" data-ii="'+i+'" data-if="cat">'+opts+'</select></div>'+
       '<div class="field wide"><label for="imp'+i+'-note">รายละเอียด</label><input type="text" maxlength="80" id="imp'+i+'-note" data-ii="'+i+'" data-if="note" value="'+esc(r.note)+'"></div>'+
       (badges ? '<div class="badges">'+badges+'</div>' : '')+'</div></div>';
@@ -347,7 +368,7 @@ $('impClear').addEventListener('click', () => {importRows.forEach(r => URL.revok
 $('impSave').addEventListener('click', () => {
   const pick = importRows.filter(r => r.include && r.amount > 0);
   if(!pick.length) return;
-  pick.forEach(r => state.expenses.push({id:newId(), date:isDate(r.date) ? r.date : todayStr(), amount:r.amount,
+  pick.forEach(r => state.expenses.push({id:newId(), date:isDate(r.date) ? r.date : todayStr(), time:isTime(r.time) ? r.time : '', amount:r.amount,
     cat:CATS.includes(r.cat) ? r.cat : 'อื่นๆ', note:String(r.note||'').slice(0,80), createdAt:Date.now(), source:'slip'}));
   if(!save()) return;
   pick.forEach(r => {r.saved = true; URL.revokeObjectURL(r.thumb);});
