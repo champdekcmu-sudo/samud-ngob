@@ -16,6 +16,7 @@
   --bg:#f2f5f4; --surface:#ffffff; --line:#d5dfdc; --fg:#16201e; --muted:#5a6a66;
   --accent:#1c6a61; --accent-soft:#e0eeeb; --on-accent:#ffffff;
   --good:#2c7a3c; --warn:#a96400; --bad:#b0352b; --bar:#93c0b8; --future:#e6ecea;
+  --c1:#2a8a7c; --c2:#3f6fb3; --c3:#c48a12; --c4:#9a64ad;
   --display:"Bai Jamjuree","IBM Plex Sans Thai",system-ui,sans-serif;
   --body:"IBM Plex Sans Thai","Segoe UI",system-ui,sans-serif;
   color-scheme:light;
@@ -23,7 +24,7 @@
 @media (prefers-color-scheme: dark){:root{
   --bg:#0f1514; --surface:#172020; --line:#2a3634; --fg:#e3ebe9; --muted:#97a8a4;
   --accent:#5dbbad; --accent-soft:#1b2d2a; --on-accent:#0b1413;
-  --good:#6cc37c; --warn:#e2a349; --bad:#f07a6f; --bar:#3e726a; --future:#1f2a28; color-scheme:dark}}
+  --good:#6cc37c; --warn:#e2a349; --bad:#f07a6f; --bar:#3e726a; --future:#1f2a28; --c1:#5dbbad; --c2:#7ea8e6; --c3:#e0b04e; --c4:#c597d8; color-scheme:dark}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 img{max-width:100%}
@@ -185,7 +186,8 @@ details summary{cursor:pointer;font-weight:600;font-family:var(--display)}
   <section class="panel" aria-labelledby="chartH">
     <h2 id="chartH">ใช้ไปแต่ละวันในรอบนี้</h2>
     <div class="chart" id="chart"></div>
-    <div class="legend"><span><i style="background:var(--bar)"></i>อยู่ในงบเฉลี่ย</span><span><i style="background:var(--warn)"></i>เกินงบเฉลี่ย</span><span><i style="background:var(--future)"></i>วันที่ยังไม่ถึง</span></div>
+    <div class="legend" id="chartLegend"></div>
+    <p class="note">จุดสีส้มเหนือแท่ง = วันที่ใช้เกินงบเฉลี่ย · แตะแท่งเพื่อดูยอดแต่ละหมวด</p>
   </section>
 
   <section class="panel" aria-labelledby="listH">

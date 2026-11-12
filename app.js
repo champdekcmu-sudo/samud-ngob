@@ -90,23 +90,43 @@ function render(){
   renderList(inP);
 }
 
+const CAT_COLORS = {'อาหาร':'var(--c1)', 'เดินทาง':'var(--c2)', 'ของใช้':'var(--c3)', 'อื่นๆ':'var(--c4)'};
+const BUD_CATS = CATS.filter(c => c !== FIXED_CAT);
 function renderChart(p, inB, ps, total, tn){
-  const by = {}; inB.forEach(e => {by[e.date] = (by[e.date]||0) + (Number(e.amount)||0);});
+  const by = {}, catTot = {};
+  BUD_CATS.forEach(c => catTot[c] = 0);
+  inB.forEach(e => {
+    const c = BUD_CATS.includes(e.cat) ? e.cat : 'อื่นๆ', a = Number(e.amount)||0;
+    (by[e.date] = by[e.date] || {})[c] = (by[e.date][c]||0) + a; catTot[c] += a;
+  });
   const avg = p.budget/total;
-  const vals = [...Array(total)].map((_,i) => by[fromNum(ps+i)]||0);
+  const days = [...Array(total)].map((_,i) => by[fromNum(ps+i)] || {});
+  const vals = days.map(d => BUD_CATS.reduce((t,c) => t + (d[c]||0), 0));
   const max = Math.max(avg*1.6, ...vals) || 1;
-  const W = 640, H = 170, top = 18, bottom = 26, left = 6, right = 6, ch = H-top-bottom;
+  const W = 640, H = 180, top = 24, bottom = 26, left = 6, right = 6, ch = H-top-bottom;
   const bw = (W-left-right)/total;
   const y = v => top+ch-(v/max)*ch;
   const step = total > 20 ? 5 : (total > 10 ? 3 : 1);
-  let s = '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="กราฟรายจ่ายรายวัน">';
+  let s = '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="กราฟรายจ่ายรายวันแยกตามหมวด">';
   s += '<line x1="'+left+'" x2="'+(W-right)+'" y1="'+(top+ch)+'" y2="'+(top+ch)+'" stroke="var(--line)"/>';
   vals.forEach((v,i) => {
     const n = ps+i, x = left+i*bw+bw*0.15, w = bw*0.7;
     if(n > tn){ s += '<rect x="'+x+'" y="'+(top+ch-3)+'" width="'+w+'" height="3" rx="1" fill="var(--future)"/>'; }
     else{
-      const h = Math.max(v > 0 ? 2 : 0, (v/max)*ch);
-      s += '<rect x="'+x+'" y="'+(top+ch-h)+'" width="'+w+'" height="'+h+'" rx="2" fill="'+(v > avg ? 'var(--warn)' : 'var(--bar)')+'"><title>'+fmtD(fromNum(n))+': '+fmt(v)+' บาท</title></rect>';
+      if(v > 0){
+        const segs = BUD_CATS.filter(c => days[i][c] > 0);
+        const tip = fmtD(fromNum(n))+': รวม '+fmt(v)+' บาท'+segs.map(c => '\n'+c+' '+fmt(days[i][c])).join('');
+        let base = top+ch;
+        s += '<g><title>'+esc(tip)+'</title>';
+        segs.forEach((c,k) => {
+          const h = Math.max(1.5, (days[i][c]/max)*ch);
+          const gap = k < segs.length-1 && h > 3 ? 1 : 0;
+          s += '<rect x="'+x+'" y="'+(base-h)+'" width="'+w+'" height="'+(h-gap)+'" fill="'+CAT_COLORS[c]+'"/>';
+          base -= h;
+        });
+        s += '</g>';
+        if(v > avg) s += '<circle cx="'+(x+w/2)+'" cy="'+(base-6)+'" r="3" fill="var(--warn)"/>';
+      }
       if(n === tn) s += '<circle cx="'+(x+w/2)+'" cy="'+(top+ch+6)+'" r="2.5" fill="var(--accent)"/>';
     }
     if(i%step === 0 || i === total-1) s += '<text x="'+(x+w/2)+'" y="'+(H-6)+'" text-anchor="middle" font-size="11" fill="var(--muted)">'+Number(fromNum(n).slice(8))+'</text>';
@@ -114,6 +134,8 @@ function renderChart(p, inB, ps, total, tn){
   s += '<line x1="'+left+'" x2="'+(W-right)+'" y1="'+y(avg)+'" y2="'+y(avg)+'" stroke="var(--accent)" stroke-dasharray="4 4"/>';
   s += '<text x="'+(W-right)+'" y="'+(y(avg)-5)+'" text-anchor="end" font-size="11" fill="var(--accent)">เฉลี่ย '+fmt0(avg)+' บาท/วัน</text></svg>';
   $('chart').innerHTML = s;
+  $('chartLegend').innerHTML = BUD_CATS.map(c => '<span><i style="background:'+CAT_COLORS[c]+'"></i>'+esc(c)+' <b class="num" style="color:var(--fg);font-weight:600">'+fmt0(catTot[c])+'</b></span>').join('')
+    + '<span><i style="background:var(--future)"></i>วันที่ยังไม่ถึง</span>';
 }
 
 const pendingDel = new Set();
