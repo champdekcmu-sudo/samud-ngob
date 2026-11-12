@@ -56,6 +56,9 @@ header{display:flex;flex-direction:column;gap:6px}
 .stat span{font-size:.8rem;color:var(--muted)}
 form{display:flex;flex-direction:column;gap:12px}
 form>.field{flex:none}
+.chk{display:flex;gap:10px;align-items:flex-start;font-size:.9rem}
+.chk input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
+.paylist{margin:4px 0 0;padding-left:20px}
 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .field{display:flex;flex-direction:column;gap:4px;flex:1 1 140px;min-width:0}
 .field label,.lbl{font-size:.82rem;color:var(--muted);font-weight:500}
@@ -143,6 +146,7 @@ details summary{cursor:pointer;font-weight:600;font-family:var(--display)}
       <span class="pill good" id="statusPill">อยู่ในงบ</span>
     </div>
     <p class="muted num" id="todayLine"></p>
+    <p class="note" id="payLine"></p>
     <div class="stats">
       <div class="stat"><b id="sRemain">0</b><span>เหลือทั้งรอบ (บาท)</span></div>
       <div class="stat"><b id="sDays">0</b><span>วันที่เหลือ รวมวันนี้</span></div>
@@ -208,6 +212,8 @@ details summary{cursor:pointer;font-weight:600;font-family:var(--display)}
       <summary>ตั้งค่ารอบงบ</summary>
       <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
         <p class="note">งบแต่ละรอบคือเงินสำหรับกินและใช้จ่ายรายวัน หลังหักบัตรเครดิตและค่าใช้จ่ายประจำแล้ว</p>
+        <label class="chk"><input type="checkbox" id="autoPay" checked> <span>สร้างรอบงบใหม่อัตโนมัติเมื่อเงินเดือนออก (ข้าราชการ รับก้อนเดียว งวดที่ 2) งบใช้เท่ารอบก่อน แก้ได้ในตารางนี้</span></label>
+        <div class="note">วันเงินเดือนเข้าครั้งถัดไป<ul class="paylist" id="payList"></ul></div>
         <div class="ptable"><table><thead><tr><th>ชื่อรอบ</th><th>เริ่ม</th><th>สิ้นสุด</th><th>งบ (บาท)</th><th></th></tr></thead><tbody id="pBody"></tbody></table></div>
         <div class="row"><button type="button" id="pAdd">เพิ่มรอบถัดไป</button><button type="button" class="primary" id="pSave">บันทึกการตั้งค่า</button></div>
       </div>

@@ -3,8 +3,8 @@
 /* ---------- Settings and storage ---------- */
 const TH_M = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const DEFAULT_PERIODS = [
-  {name:'ก่อนเงินเดือนออก', start:'2026-11-11', end:'2026-11-26', budget:5000},
-  {name:'หลังเงินเดือนออก', start:'2026-11-27', end:'2026-12-25', budget:8232}
+  {name:'ก่อนเงินเดือนออก', start:'2026-11-11', end:'2026-11-24', budget:5000},
+  {name:'หลังเงินเดือนออก', start:'2026-11-25', end:'2026-12-24', budget:8232}
 ];
 const DEFAULT_SAV = {income:22184, car:5000, fixed:8061, food:300, other:2000, saving:3000, current:1000, months:3};
 const FIXED_CAT = 'ค่าใช้จ่ายประจำ';
@@ -23,6 +23,7 @@ function load(){
     if(Array.isArray(s.expenses)) state.expenses = s.expenses;
     if(Array.isArray(s.periods) && s.periods.length) state.periods = s.periods;
     if(s.sav) state.sav = {...DEFAULT_SAV, ...s.sav};
+    if(s.autoPay === false) state.autoPay = false;
   }catch(e){}
 }
 let askedPersist = false;
@@ -90,6 +91,7 @@ function render(){
   $('sRemain').textContent = fmt0(budget-spent);
   $('sDays').textContent = ended ? 0 : daysLeft;
   $('sSpent').textContent = fmt0(spent);
+  renderPay();
   renderChart(p, inB, ps, total, tn, budget);
   renderList(inP);
 }
@@ -441,6 +443,49 @@ async function takeShared(){
   if(location.search) history.replaceState(null, '', location.pathname);
 }
 
+/* ---------- Government payday (paid in one lump on round 2) ---------- */
+// Round-2 dates announced by the Comptroller General's Department. Add new months here when announced: 'YYYY-MM':'YYYY-MM-DD'
+const PAYDAYS = {'2026-10':'2026-10-27', '2026-11':'2026-11-25', '2026-12':'2026-12-25'};
+function payday(y, m){
+  const k = y+'-'+pad(m);
+  if(PAYDAYS[k]) return {date:PAYDAYS[k], official:true};
+  let n = dnum(k+'-25'); const wd = new Date(n*864e5).getUTCDay();
+  if(wd === 6) n += 2; else if(wd === 0) n += 1;
+  return {date:fromNum(n), official:false};
+}
+function nextPayday(afterNum){
+  const d = new Date(afterNum*864e5); let y = d.getUTCFullYear(), m = d.getUTCMonth()+1;
+  for(let i = 0; i < 3; i++){const p = payday(y, m); if(dnum(p.date) > afterNum) return p; m++; if(m > 12){m = 1; y++;}}
+}
+function autoExtend(){
+  if(state.autoPay === false || !state.periods.length) return false;
+  const tn = dnum(todayStr()); let changed = false;
+  for(let g = 0; g < 24; g++){
+    const last = [...state.periods].sort((a,b) => dnum(a.end)-dnum(b.end)).pop();
+    if(dnum(last.end) >= tn) break;
+    const s = dnum(last.end)+1;
+    let np = nextPayday(s); if(dnum(np.date)-s < 7) np = nextPayday(dnum(np.date));
+    const [y, m] = fromNum(s).split('-').map(Number);
+    state.periods.push({name:'รอบเงินเดือน '+TH_M[m-1]+' '+String(y+543).slice(2), start:fromNum(s), end:fromNum(dnum(np.date)-1), budget:Number(last.budget)||0, auto:true});
+    changed = true;
+  }
+  return changed;
+}
+function renderPay(){
+  const tn = dnum(todayStr()), np = nextPayday(tn-1), days = dnum(np.date)-tn;
+  const src = np.official ? 'ตามประกาศกรมบัญชีกลาง' : 'ประมาณการ รอประกาศกรมบัญชีกลาง';
+  $('payLine').textContent = (days === 0 ? 'วันนี้เงินเดือนเข้า' : 'เงินเดือนเข้าครั้งถัดไป '+fmtD(np.date)+' (อีก '+days+' วัน)')+' · '+src;
+  const list = []; let a = tn-1;
+  for(let i = 0; i < 4; i++){const p = nextPayday(a); list.push('<li>'+esc(fmtD(p.date))+' '+String(Number(p.date.slice(0,4))+543)+(p.official ? '' : ' <span class="muted">(ประมาณการ)</span>')+'</li>'); a = dnum(p.date);}
+  $('payList').innerHTML = list.join('');
+  $('autoPay').checked = state.autoPay !== false;
+}
+$('autoPay').addEventListener('change', () => {
+  state.autoPay = $('autoPay').checked;
+  if(autoExtend()) renderPeriods();
+  save(); render(); toast(state.autoPay ? 'เปิดสร้างรอบงบอัตโนมัติแล้ว' : 'ปิดสร้างรอบงบอัตโนมัติแล้ว');
+});
+
 /* ---------- Period settings ---------- */
 function renderPeriods(){
   $('pBody').innerHTML = state.periods.map((p,i) => '<tr>'+
@@ -542,6 +587,8 @@ $('importFile').addEventListener('change', async () => {
     });
     if(Array.isArray(d.periods) && d.periods.length) state.periods = d.periods;
     if(d.sav) state.sav = {...DEFAULT_SAV, ...d.sav};
+    if(typeof d.autoPay === 'boolean') state.autoPay = d.autoPay;
+    autoExtend();
     if(save()){renderPeriods(); fillSavInputs(); renderSav(); render(); toast('นำเข้าแล้ว เพิ่ม '+added+' รายการ');}
   }catch(e){toast('ไฟล์นี้ไม่ใช่ไฟล์สำรองของสมุดงบ');}
 });
@@ -565,6 +612,7 @@ load();
 // Clean up data left by the removed notification feature
 try{localStorage.removeItem('slip-ledger-inbox'); localStorage.removeItem('slip-ledger-seen');}catch(e){}
 if(location.hash.startsWith('#n=')) history.replaceState(null, '', location.pathname + location.search);
+if(autoExtend()) save();
 renderPeriods(); fillSavInputs(); renderSav(); render(); updatePicked();
 takeShared();
-document.addEventListener('visibilitychange', () => {if(!document.hidden) render();});
+document.addEventListener('visibilitychange', () => {if(document.hidden) return; if(autoExtend()){save(); renderPeriods();} render();});

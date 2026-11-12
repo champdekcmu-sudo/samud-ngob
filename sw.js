@@ -1,5 +1,5 @@
 // Offline cache for the app shell, plus the Android "Share" target for slip images.
-const CACHE = 'slip-ledger-v6';
+const CACHE = 'slip-ledger-v7';
 const SHARED = 'shared-slips';
 const SHELL = ['./', './index.html', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
