@@ -5,267 +5,433 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>สมุดงบรายวัน</title>
 <meta name="theme-color" content="#1c6a61">
-<meta name="description" content="จดรายจ่ายรายวัน อ่านสลิปโอนเงิน และวางแผนออมเงิน">
+<meta name="description" content="จดรายจ่ายรายวัน งบรายเดือน รายจ่ายประจำ และเงินออม">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
 <style>
-/* Layout: one ledger column. Today's allowance first, quick entry, slip import, the period's day bars, entries, then settings, savings plan and backup. */
+/* Layout: a phone-first app with four tabs (Today, Monthly, Savings, Settings) and a fixed bottom tab bar.
+   Today = what's left to spend; Monthly = income and recurring bills that set the budget; Savings = its own space. */
 :root{
-  --bg:#f2f5f4; --surface:#ffffff; --line:#d5dfdc; --fg:#16201e; --muted:#5a6a66;
-  --accent:#1c6a61; --accent-soft:#e0eeeb; --on-accent:#ffffff;
-  --good:#2c7a3c; --warn:#a96400; --bad:#b0352b; --bar:#93c0b8; --future:#e6ecea;
+  --bg:#eef3f1; --surface:#ffffff; --surface-2:#f6f9f8; --line:#dbe4e1; --fg:#15201d; --muted:#5d6d69;
+  --accent:#1c6a61; --accent-2:#2a8a7c; --accent-soft:#dfeeea; --on-accent:#ffffff;
+  --good:#2c7a3c; --good-soft:#e3f1e5; --warn:#a96400; --warn-soft:#fbefdc; --bad:#b0352b; --bad-soft:#f8e3e0;
+  --bar:#93c0b8; --future:#e4ebe9; --save:#4a5fb0; --save-soft:#e6e9f7; --on-save:#ffffff; --seg-on:#ffffff;
   --c1:#2a8a7c; --c2:#3f6fb3; --c3:#c48a12; --c4:#9a64ad;
+  --shadow:0 1px 2px rgba(16,40,35,.06),0 4px 14px rgba(16,40,35,.06);
   --display:"Bai Jamjuree","IBM Plex Sans Thai",system-ui,sans-serif;
   --body:"IBM Plex Sans Thai","Segoe UI",system-ui,sans-serif;
+  --tabh:64px;
   color-scheme:light;
 }
-@media (prefers-color-scheme: dark){:root{
-  --bg:#0f1514; --surface:#172020; --line:#2a3634; --fg:#e3ebe9; --muted:#97a8a4;
-  --accent:#5dbbad; --accent-soft:#1b2d2a; --on-accent:#0b1413;
-  --good:#6cc37c; --warn:#e2a349; --bad:#f07a6f; --bar:#3e726a; --future:#1f2a28; --c1:#5dbbad; --c2:#7ea8e6; --c3:#e0b04e; --c4:#c597d8; color-scheme:dark}}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1312; --surface:#161f1d; --surface-2:#1b2523; --line:#2a3633; --fg:#e3ebe9; --muted:#98a9a5;
+  --accent:#5dbbad; --accent-2:#3f9d90; --accent-soft:#1a2d29; --on-accent:#08120f;
+  --good:#6cc37c; --good-soft:#1a2b1d; --warn:#e2a349; --warn-soft:#2e2412; --bad:#f07a6f; --bad-soft:#331a17;
+  --bar:#3e726a; --future:#222d2b; --save:#8fa2ec; --save-soft:#1e2336; --on-save:#10162b; --seg-on:#2f3d3a;
+  --c1:#5dbbad; --c2:#7ea8e6; --c3:#e0b04e; --c4:#c597d8;
+  --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1312; --surface:#161f1d; --surface-2:#1b2523; --line:#2a3633; --fg:#e3ebe9; --muted:#98a9a5;
+  --accent:#5dbbad; --accent-2:#3f9d90; --accent-soft:#1a2d29; --on-accent:#08120f;
+  --good:#6cc37c; --good-soft:#1a2b1d; --warn:#e2a349; --warn-soft:#2e2412; --bad:#f07a6f; --bad-soft:#331a17;
+  --bar:#3e726a; --future:#222d2b; --save:#8fa2ec; --save-soft:#1e2336; --on-save:#10162b; --seg-on:#2f3d3a;
+  --c1:#5dbbad; --c2:#7ea8e6; --c3:#e0b04e; --c4:#c597d8;
+  --shadow:none; color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 img{max-width:100%}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-.wrap{max-width:760px;margin:0 auto;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:24px}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:720px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(var(--tabh) + 28px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.view{display:flex;flex-direction:column;gap:16px}
 h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;line-height:1.25}
-h1{font-size:1.8rem;font-weight:700}
-h2{font-size:1.3rem;font-weight:600}
-h3{font-size:1.05rem;font-weight:600}
+h1{font-size:1.6rem;font-weight:700}
+h2{font-size:1.15rem;font-weight:600}
+h3{font-size:1rem;font-weight:600}
 p{margin:0}
 .muted{color:var(--muted)}
 .num{font-variant-numeric:tabular-nums}
-.eyebrow{font-size:.78rem;letter-spacing:.04em;color:var(--muted);font-weight:600}
-header{display:flex;flex-direction:column;gap:6px}
-.head-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.note{font-size:.85rem;color:var(--muted)}
+.note{font-size:.84rem;color:var(--muted)}
 .note.warn{color:var(--warn)}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
-.today{border-color:var(--accent)}
-.today-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
-.big{font-family:var(--display);font-size:3rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
-.big small{font-size:1.1rem;font-weight:500;color:var(--muted);margin-left:6px}
-.pill{display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;font-size:.85rem;font-weight:600;border:1px solid currentColor}
-.pill.good{color:var(--good)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;border-top:1px solid var(--line);padding-top:14px}
-.stat{display:flex;flex-direction:column;gap:2px;min-width:0}
-.stat b{font-family:var(--display);font-size:1.25rem;font-weight:600;font-variant-numeric:tabular-nums}
-.stat span{font-size:.8rem;color:var(--muted)}
+.topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.topbar .sub{font-size:.85rem;color:var(--muted)}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0;box-shadow:var(--shadow)}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.card-head .total{font-family:var(--display);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* Hero */
+.hero{background:linear-gradient(150deg,var(--accent) 0%,var(--accent-2) 100%);color:var(--on-accent);border:none;gap:12px}
+.hero.save{background:linear-gradient(150deg,var(--save) 0%,#6b7fd0 100%)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hero{background:linear-gradient(150deg,#1d4a44 0%,#1a3a36 100%);color:var(--fg)}:root:not([data-theme="light"]) .hero.save{background:linear-gradient(150deg,#26305a 0%,#1f2745 100%)}}
+:root[data-theme="dark"] .hero{background:linear-gradient(150deg,#1d4a44 0%,#1a3a36 100%);color:var(--fg)}
+:root[data-theme="dark"] .hero.save{background:linear-gradient(150deg,#26305a 0%,#1f2745 100%)}
+.hero .lbl{opacity:.85;font-size:.9rem;color:inherit}
+.hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.big{font-family:var(--display);font-size:3rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.big small{font-size:1.05rem;font-weight:500;opacity:.8;margin-left:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:.82rem;font-weight:600;background:rgba(255,255,255,.18);color:inherit;white-space:nowrap}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.9}
+.pill.good::before{background:#9ff0ad} .pill.warn::before{background:#ffd27a} .pill.bad::before{background:#ffb2aa}
+.meter{height:8px;border-radius:999px;background:rgba(255,255,255,.22);overflow:hidden}
+.meter div{height:100%;border-radius:999px;background:currentColor;opacity:.9}
+.meter-row{display:flex;justify-content:space-between;font-size:.8rem;opacity:.85;gap:8px}
+.hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid rgba(255,255,255,.2);padding-top:12px}
+.hero-stats div{display:flex;flex-direction:column;min-width:0}
+.hero-stats b{font-family:var(--display);font-size:1.15rem;font-weight:600;font-variant-numeric:tabular-nums}
+.hero-stats span{font-size:.75rem;opacity:.8}
+.payline{font-size:.82rem;opacity:.9;display:flex;gap:6px;align-items:center}
+
+/* Link row (connects today's budget to the monthly plan) */
+.linkcard{display:flex;align-items:center;gap:12px;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);cursor:pointer;color:var(--fg)}
+.linkcard .ico{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.linkcard .txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.linkcard .txt b{font-family:var(--display);font-weight:600}
+.linkcard .txt span{font-size:.82rem;color:var(--muted)}
+.linkcard .chev{color:var(--muted);flex:none}
+
+/* Forms */
 form{display:flex;flex-direction:column;gap:12px}
-form>.field{flex:none}
-.chk{display:flex;gap:10px;align-items:flex-start;font-size:.9rem}
-.chk input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
-.paylist{margin:4px 0 0;padding-left:20px}
-.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .field{display:flex;flex-direction:column;gap:4px;flex:1 1 140px;min-width:0}
-.field label,.lbl{font-size:.82rem;color:var(--muted);font-weight:500}
-.entry .t{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px;font-size:.85rem}
-input[type=text],input[type=number],input[type=date],input[type=time],select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
-input:focus-visible,button:focus-visible,select:focus-visible,.chip input:focus-visible+span,.pickbtn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
-#amount{font-family:var(--display);font-size:1.4rem;font-weight:600}
+form>.field{flex:none}
+.field label,.lbl{font-size:.8rem;color:var(--muted);font-weight:500}
+input[type=text],input[type=number],input[type=date],input[type=time],select,textarea{font:inherit;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;width:100%;min-width:0}
+input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible,.chip input:focus-visible+span,.seg input:focus-visible+span,.pickbtn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.amt-input{font-family:var(--display);font-size:1.5rem;font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{position:relative}
 .chip input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
-.chip span{display:inline-block;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--bg);font-size:.9rem;cursor:pointer}
+.chip span{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);font-size:.9rem;cursor:pointer}
+.chip span i{width:8px;height:8px;border-radius:50%}
 .chip input:checked+span{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
-button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);padding:9px 14px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
+.seg label{position:relative}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:block;text-align:center;padding:8px;border-radius:9px;font-weight:600;font-size:.9rem;color:var(--muted);cursor:pointer}
+.seg input:checked+span{background:var(--seg-on);color:var(--fg);box-shadow:var(--shadow)}
+.seg input[value=in]:checked+span{color:var(--good)}
+.chk{display:flex;gap:10px;align-items:flex-start;font-size:.9rem}
+.chk input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
+button{font:inherit;cursor:pointer;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);padding:9px 14px}
 button.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600;padding:12px 18px}
+button.primary.block{width:100%}
+button.save-btn{background:var(--save);border-color:var(--save);color:var(--on-save);font-weight:600;padding:12px 18px}
+button.ghost{background:none;border:1px dashed var(--line);color:var(--accent);font-weight:600;width:100%;padding:11px}
 button.link{background:none;border:none;color:var(--muted);padding:4px 6px;font-size:.85rem}
 button.link.confirm{color:var(--bad);font-weight:600}
+button.icon{background:none;border:none;color:var(--muted);padding:6px;border-radius:10px;display:grid;place-items:center;min-width:36px;min-height:36px}
+button.icon.confirm{color:var(--bad);background:var(--bad-soft);font-size:.78rem;font-weight:600;padding:6px 10px}
 button:disabled{opacity:.5;cursor:not-allowed}
-.pickbtn{position:relative;display:inline-flex;align-items:center;justify-content:center;padding:14px 20px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-weight:600;cursor:pointer;overflow:hidden}
+.pickbtn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 18px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-weight:600;cursor:pointer;overflow:hidden}
 .pickbtn input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.thumbs{display:flex;flex-wrap:wrap;gap:8px}
-.thumbs img{width:64px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
-.progress{height:8px;border-radius:999px;background:var(--future);overflow:hidden}
-.progress div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.pickbtn.alt{background:var(--surface-2);color:var(--fg);border:1px solid var(--line);font-weight:500}
+
+/* Editable money lists (income sources, recurring bills) */
+.elist{display:flex;flex-direction:column}
+.erow{display:grid;grid-template-columns:1fr 112px auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.erow:last-child{border-bottom:none}
+.erow input{padding:9px 10px}
+.erow input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
+.sumline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0 0;border-top:1px solid var(--line);font-weight:600}
+.sumline b{font-family:var(--display);font-variant-numeric:tabular-nums;font-size:1.1rem}
+
+/* Monthly flow */
+.flow{display:flex;flex-direction:column;gap:6px}
+.flow-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:.95rem}
+.flow-row .v{font-variant-numeric:tabular-nums;font-weight:600}
+.flow-row.minus .v{color:var(--muted)}
+.flow-row.total{border-top:1px solid var(--line);padding-top:8px;margin-top:2px}
+.flow-row.total .v{font-family:var(--display);font-size:1.3rem;color:var(--accent)}
+.flow-row.total.neg .v{color:var(--bad)}
+.alloc{display:flex;height:14px;border-radius:999px;overflow:hidden;background:var(--future)}
+.alloc div{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.callout{display:flex;gap:10px;padding:12px 14px;border-radius:14px;background:var(--accent-soft);color:var(--fg);font-size:.88rem}
+.callout.warn{background:var(--warn-soft)}
+.callout.bad{background:var(--bad-soft)}
+
+/* Charts */
 .chart{overflow-x:auto}
 .chart svg{display:block;min-width:520px;width:100%;height:auto}
-.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted)}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
-.day{display:flex;flex-direction:column;gap:2px}
-.day-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);padding:8px 0 4px;border-bottom:1px solid var(--line)}
-.entry{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;padding:6px 0}
-.entry .tag{font-size:.75rem;padding:2px 8px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-weight:600}
-.entry .what{min-width:0;overflow-wrap:anywhere}
+
+/* Daily entries */
+.day{display:flex;flex-direction:column}
+.day-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.8rem;color:var(--muted);padding:10px 0 4px;border-bottom:1px solid var(--line)}
+.entry{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;padding:8px 0}
+.entry .tag{font-size:.74rem;padding:3px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600;white-space:nowrap}
+.entry .what{min-width:0;overflow-wrap:anywhere;font-size:.92rem}
+.entry .t{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px;font-size:.82rem}
 .entry .amt{font-variant-numeric:tabular-nums;font-weight:600}
 .entry.fixed .tag{background:var(--future);color:var(--muted)}
 .entry.fixed .amt{color:var(--muted);font-weight:500}
-.entry.income .tag{background:transparent;color:var(--good);box-shadow:inset 0 0 0 1px var(--good)}
+.entry.income .tag{background:var(--good-soft);color:var(--good)}
 .entry.income .amt{color:var(--good)}
-.empty{padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);text-align:center}
+.entry.save-in .tag{background:var(--save-soft);color:var(--save)}
+.entry.save-in .amt{color:var(--save)}
+.entry.save-out .tag{background:var(--warn-soft);color:var(--warn)}
+.empty{padding:18px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);text-align:center;font-size:.9rem}
+
+/* Slip import */
+.thumbs{display:flex;flex-wrap:wrap;gap:8px}
+.thumbs img{width:60px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.progress{height:8px;border-radius:999px;background:var(--future);overflow:hidden}
+.progress div{height:100%;width:0;background:var(--accent);transition:width .2s}
 .imp-list{display:flex;flex-direction:column;gap:10px}
-.imp-row{display:grid;grid-template-columns:auto 64px 1fr;gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px;align-items:start}
+.imp-row{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;align-items:start}
+.imp-row.has-img{grid-template-columns:auto 60px 1fr}
 .imp-row.off{opacity:.55}
 .imp-row input[type=checkbox]{width:22px;height:22px;margin-top:4px;accent-color:var(--accent)}
-.imp-row img{width:64px;height:96px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.imp-row img{width:60px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .imp-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;min-width:0}
 .imp-fields .wide{grid-column:1/-1}
 .badges{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}
-.badge{font-size:.75rem;padding:2px 8px;border-radius:6px;border:1px solid currentColor}
+.badge{font-size:.74rem;padding:2px 8px;border-radius:6px;border:1px solid currentColor}
 .badge.warn{color:var(--warn)} .badge.info{color:var(--muted)}
-details summary{cursor:pointer;font-weight:600;font-family:var(--display)}
-.ptable{overflow-x:auto}
-.ptable table{border-collapse:collapse;width:100%;min-width:520px}
-.ptable td,.ptable th{padding:6px;text-align:left;font-size:.85rem}
-.ptable th{color:var(--muted);font-weight:500}
-.sav-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.alloc{display:flex;height:22px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
-.alloc div{height:100%}
+details.fold>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px;font-family:var(--display);font-weight:600;font-size:1.05rem}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::after{content:"";width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .2s;margin-right:4px}
+details.fold[open]>summary::after{transform:rotate(-135deg)}
+details.fold>.fold-body{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+textarea{resize:none;min-height:52px}
+
+/* Savings */
+.save-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .mile{width:100%;border-collapse:collapse}
-.mile td,.mile th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;font-size:.9rem}
-.mile th{color:var(--muted);font-weight:500;font-size:.8rem}
-.mile td:last-child,.mile th:last-child{text-align:right}
-.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.mile td,.mile th{padding:9px 4px;border-bottom:1px solid var(--line);text-align:left;font-size:.9rem}
+.mile th{color:var(--muted);font-weight:500;font-size:.78rem}
+.mile td:nth-child(2),.mile th:nth-child(2),.mile td:last-child,.mile th:last-child{text-align:right}
+.mile tr.done td{color:var(--good)}
+.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:.92rem}
 .tips li.bad{color:var(--bad)} .tips li.warn{color:var(--warn)}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.9rem;max-width:calc(100% - 32px);z-index:20}
-@media (max-width:480px){.big{font-size:2.5rem}.stats{grid-template-columns:1fr 1fr}.stats .stat:last-child{grid-column:span 2}.imp-row{grid-template-columns:auto 1fr}.imp-row img{grid-column:2;width:96px;height:140px}.imp-row .imp-fields{grid-column:1/-1}}
-@media (prefers-reduced-motion:reduce){.progress div{transition:none}}
+
+/* Settings */
+.plist{display:flex;flex-direction:column;gap:10px}
+.pcard{border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--surface-2)}
+.pcard.cur{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.pcard .wide{grid-column:1/-1;display:flex;gap:8px;align-items:center}
+.pcard .wide input{flex:1}
+.pcard input,.pcard select{background:var(--surface);padding:8px 10px}
+.pcard .auto-b{display:flex;align-items:center;font-variant-numeric:tabular-nums;color:var(--muted);font-size:.9rem;padding:0 4px}
+.paylist{margin:4px 0 0;padding-left:20px}
+
+/* Bottom tab bar */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+.tabbar-in{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.tab{background:none;border:none;border-radius:12px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-size:.72rem;font-weight:600;min-height:52px}
+.tab svg{width:24px;height:24px}
+.tab[aria-selected=true]{color:var(--accent)}
+.tab[aria-selected=true] .tab-ico{background:var(--accent-soft)}
+.tab-ico{display:grid;place-items:center;width:52px;height:30px;border-radius:999px;transition:background .2s}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh) + 18px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:.9rem;max-width:calc(100% - 32px);z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+@media (max-width:420px){.big{font-size:2.6rem}.erow{grid-template-columns:1fr 96px auto}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div class="head-row">
-      <p class="eyebrow" id="periodName">งบรอบปัจจุบัน</p>
-      <button type="button" id="installBtn" hidden>ติดตั้งลงหน้าจอ</button>
-    </div>
-    <h1>สมุดงบรายวัน</h1>
-    <p class="note">ข้อมูลเก็บไว้ในมือถือเครื่องนี้ สำรองเป็นไฟล์ได้ที่ด้านล่างสุด</p>
-  </header>
 
-  <section class="panel today" aria-labelledby="todayH">
-    <div class="today-top">
+  <!-- ============ วันนี้ ============ -->
+  <section class="view" id="view-today" aria-labelledby="todayTitle">
+    <div class="topbar">
+      <div><p class="sub" id="todayDate"></p><h1 id="todayTitle">วันนี้</h1></div>
+      <div class="row"><button type="button" id="installBtn" hidden>ติดตั้งลงหน้าจอ</button><span class="note" id="periodChip"></span></div>
+    </div>
+
+    <div class="card hero" aria-live="polite">
+      <div class="hero-top">
+        <div><p class="lbl" id="todayH">วันนี้ยังใช้ได้อีก</p><div class="big" id="leftToday">0<small>บาท</small></div></div>
+        <span class="pill good" id="statusPill">อยู่ในงบ</span>
+      </div>
+      <p class="num" id="todayLine" style="font-size:.9rem;opacity:.9"></p>
       <div>
-        <p id="todayH" class="lbl" style="font-size:.9rem">วันนี้ยังใช้ได้อีก</p>
-        <div class="big" id="leftToday">0<small>บาท</small></div>
+        <div class="meter" role="img" id="meterBox"><div id="meterBar" style="width:0"></div></div>
+        <div class="meter-row" style="margin-top:4px"><span id="meterL"></span><span id="meterR"></span></div>
       </div>
-      <span class="pill good" id="statusPill">อยู่ในงบ</span>
-    </div>
-    <p class="muted num" id="todayLine"></p>
-    <p class="note" id="payLine"></p>
-    <div class="stats">
-      <div class="stat"><b id="sRemain">0</b><span>เหลือทั้งรอบ (บาท)</span></div>
-      <div class="stat"><b id="sDays">0</b><span>วันที่เหลือ รวมวันนี้</span></div>
-      <div class="stat"><b id="sSpent">0</b><span>ใช้ไปแล้ว (บาท)</span></div>
-    </div>
-  </section>
-
-  <section class="panel" aria-labelledby="addH">
-    <h2 id="addH">จดรายจ่าย / รายรับ</h2>
-    <form id="addForm" novalidate>
-      <div class="chips" role="radiogroup" aria-label="ประเภท">
-        <label class="chip"><input type="radio" name="kind" id="kind-out" value="out" checked><span>รายจ่าย</span></label>
-        <label class="chip"><input type="radio" name="kind" id="kind-in" value="in"><span>รายรับเพิ่ม</span></label>
+      <div class="hero-stats">
+        <div><b id="sRemain">0</b><span>เหลือทั้งรอบ</span></div>
+        <div><b id="sDays">0</b><span>วันที่เหลือ</span></div>
+        <div><b id="sSpent">0</b><span>ใช้ไปแล้ว</span></div>
       </div>
-      <div class="row">
-        <div class="field"><label for="amount">จำนวนเงิน (บาท)</label><input id="amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0"></div>
-        <div class="field"><label for="date">วันที่</label><input id="date" type="date"></div>
-        <div class="field" style="flex:0 1 120px"><label for="time">เวลา</label><input id="time" type="time"></div>
-      </div>
-      <p class="note" id="incNote" hidden>รายรับเพิ่ม เช่น งานเสริม หรือค่าเช่ารถที่ได้มากกว่าปกติ จะถูกบวกเข้างบรอบนี้ตามวันที่ที่ได้รับ งบรายวันที่เหลือจะเพิ่มขึ้นตาม</p>
-      <div class="field" id="catField"><span class="lbl">หมวด</span>
-        <div class="chips" role="radiogroup" aria-label="หมวด" id="catChips"></div>
-        <p class="note">"ค่าใช้จ่ายประจำ" เช่น ค่าห้อง บัตรเครดิต ประกัน ค่าโทรศัพท์ จะถูกจดไว้แต่ไม่นับในงบรายวัน</p>
-      </div>
-      <div class="field"><label for="note">รายละเอียด (ไม่ใส่ก็ได้)</label><input id="note" type="text" maxlength="80" placeholder="เช่น ข้าวกลางวัน"></div>
-      <div><button class="primary" type="submit" id="addBtn">บันทึกรายจ่าย</button></div>
-    </form>
-  </section>
-
-  <section class="panel" aria-labelledby="impH" id="impSection">
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <h2 id="impH">นำเข้าจากสลิปโอนเงิน</h2>
-      <p class="muted">เลือกรูปสลิป หรือกด "แชร์" รูปสลิปจากแอปธนาคารหรือแกลเลอรีมาที่แอปนี้ แอปจะอ่านจำนวนเงินและวันที่ให้ ตรวจและแก้ได้ก่อนบันทึก</p>
+      <p class="payline" id="payLine"></p>
     </div>
-    <div class="row">
-      <label class="pickbtn">เลือกรูปสลิป<input id="slipFile" type="file" accept="image/*" multiple aria-label="เลือกรูปสลิป"></label>
-      <button type="button" class="link" id="pickClear" hidden>ล้างรูปที่เลือก</button>
+
+    <button type="button" class="linkcard" data-go="month" id="budgetLink">
+      <span class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>
+      <span class="txt"><b id="linkTitle">งบรอบนี้</b><span id="linkSub"></span></span>
+      <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+
+    <div class="card" id="addCard">
+      <div class="card-head"><h2>จดรายการ</h2></div>
+      <form id="addForm" novalidate>
+        <div class="seg" role="radiogroup" aria-label="ประเภท">
+          <label><input type="radio" name="kind" id="kind-out" value="out" checked><span>รายจ่าย</span></label>
+          <label><input type="radio" name="kind" id="kind-in" value="in"><span>รายรับเพิ่ม</span></label>
+        </div>
+        <div class="field"><label for="amount">จำนวนเงิน (บาท)</label><input id="amount" class="amt-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0"></div>
+        <div class="field" id="catField"><span class="lbl">หมวด</span><div class="chips" role="radiogroup" aria-label="หมวด" id="catChips"></div></div>
+        <p class="note" id="incNote" hidden>รายรับเพิ่ม เช่น งานเสริม จะถูกบวกเข้างบรอบนี้ตามวันที่ได้รับ งบรายวันจะเพิ่มขึ้นตาม</p>
+        <div class="row">
+          <div class="field"><label for="date">วันที่</label><input id="date" type="date"></div>
+          <div class="field" style="flex:0 1 120px"><label for="time">เวลา</label><input id="time" type="time"></div>
+        </div>
+        <div class="field"><label for="note">รายละเอียด (ไม่ใส่ก็ได้)</label><input id="note" type="text" maxlength="80" placeholder="เช่น ข้าวกลางวัน"></div>
+        <button class="primary block" type="submit" id="addBtn">บันทึกรายจ่าย</button>
+      </form>
     </div>
-    <div class="thumbs" id="thumbs"></div>
-    <p class="note" id="pickNote">ยังไม่ได้เลือกรูป</p>
-    <div><button type="button" class="primary" id="impRead" disabled>อ่านสลิป</button></div>
-    <div class="progress" id="impProg" hidden><div></div></div>
-    <p class="note" id="impStatus" aria-live="polite"></p>
-    <div class="imp-list" id="impList"></div>
-    <div class="row" id="impActions" hidden><button type="button" class="primary" id="impSave">บันทึกรายการที่เลือก</button><button type="button" id="impClear">ล้างผลการอ่าน</button></div>
-    <p class="note">การอ่านสลิปทำบนมือถือของคุณ รูปไม่ถูกส่งไปที่ไหน ครั้งแรกต้องดาวน์โหลดข้อมูลภาษาไทยประมาณ 10 MB แนะนำให้ใช้ Wi-Fi</p>
-  </section>
 
-  <section class="panel" aria-labelledby="chartH">
-    <h2 id="chartH">ใช้ไปแต่ละวันในรอบนี้</h2>
-    <div class="chart" id="chart"></div>
-    <div class="legend" id="chartLegend"></div>
-    <p class="note">จุดสีส้มเหนือแท่ง = วันที่ใช้เกินงบเฉลี่ย · แตะแท่งเพื่อดูยอดแต่ละหมวด</p>
-  </section>
+    <div class="card" id="impSection">
+      <details class="fold" id="impFold">
+        <summary>อ่านจากสลิปโอนเงิน</summary>
+        <div class="fold-body">
+          <p class="muted" style="font-size:.9rem">เลือกรูปสลิป หรือกด "แชร์" รูปสลิปจากแอปธนาคารหรือแกลเลอรีมาที่แอปนี้ แอปจะอ่านจำนวนเงิน วันที่ และเวลาให้ ตรวจแก้ได้ก่อนบันทึก</p>
+          <div class="row">
+            <label class="pickbtn">เลือกรูปสลิป<input id="slipFile" type="file" accept="image/*" multiple aria-label="เลือกรูปสลิป"></label>
+            <button type="button" class="link" id="pickClear" hidden>ล้างรูปที่เลือก</button>
+          </div>
+          <div class="thumbs" id="thumbs"></div>
+          <p class="note" id="pickNote">ยังไม่ได้เลือกรูป</p>
+          <div><button type="button" class="primary" id="impRead" disabled>อ่านสลิป</button></div>
+          <p class="note">อ่านบนมือถือของคุณ รูปไม่ถูกส่งไปที่ไหน ครั้งแรกต้องดาวน์โหลดข้อมูลภาษาไทยประมาณ 10 MB แนะนำให้ใช้ Wi-Fi</p>
 
-  <section class="panel" aria-labelledby="listH">
-    <h2 id="listH">รายการในรอบนี้</h2>
-    <div id="list"></div>
-  </section>
-
-  <section class="panel">
-    <details>
-      <summary>ตั้งค่ารอบงบ</summary>
-      <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
-        <p class="note">งบแต่ละรอบคือเงินสำหรับกินและใช้จ่ายรายวัน หลังหักบัตรเครดิตและค่าใช้จ่ายประจำแล้ว</p>
-        <label class="chk"><input type="checkbox" id="autoPay" checked> <span>สร้างรอบงบใหม่อัตโนมัติเมื่อเงินเดือนออก (ข้าราชการ รับก้อนเดียว งวดที่ 2) งบใช้เท่ารอบก่อน แก้ได้ในตารางนี้</span></label>
-        <div class="note">วันเงินเดือนเข้าครั้งถัดไป<ul class="paylist" id="payList"></ul></div>
-        <div class="ptable"><table><thead><tr><th>ชื่อรอบ</th><th>เริ่ม</th><th>สิ้นสุด</th><th>งบ (บาท)</th><th></th></tr></thead><tbody id="pBody"></tbody></table></div>
-        <div class="row"><button type="button" id="pAdd">เพิ่มรอบถัดไป</button><button type="button" class="primary" id="pSave">บันทึกการตั้งค่า</button></div>
-      </div>
-    </details>
-  </section>
-
-  <section class="panel" aria-labelledby="savH">
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <p class="eyebrow">ระยะยาว ตั้งแต่ ม.ค. 2570</p>
-      <h2 id="savH">แผนออมเงินสำรองฉุกเฉิน</h2>
-      <p class="muted">ตัวเลขตั้งต้นมาจากรายรับรายจ่ายของคุณ แก้ได้ทุกช่อง</p>
+          <p class="note" id="impStatus" aria-live="polite"></p>
+          <div class="progress" id="impProg" hidden><div></div></div>
+          <div class="imp-list" id="impList"></div>
+          <div class="row" id="impActions" hidden><button type="button" class="primary" id="impSave">บันทึกรายการที่เลือก</button><button type="button" id="impClear">ล้างผลการอ่าน</button></div>
+        </div>
+      </details>
     </div>
-    <div class="sav-grid">
-      <div class="field"><label for="sv-income">เงินเดือน / เดือน</label><input id="sv-income" type="number" inputmode="decimal" data-k="income"></div>
-      <div class="field"><label for="sv-car">ค่าเช่ารถ / เดือน</label><input id="sv-car" type="number" inputmode="decimal" data-k="car"></div>
-      <div class="field"><label for="sv-fixed">ค่าใช้จ่ายประจำ / เดือน</label><input id="sv-fixed" type="number" inputmode="decimal" data-k="fixed"></div>
-      <div class="field"><label for="sv-food">ค่ากินใช้ / วัน</label><input id="sv-food" type="number" inputmode="decimal" data-k="food"></div>
-      <div class="field"><label for="sv-other">บัตรเครดิตและอื่นๆ / เดือน</label><input id="sv-other" type="number" inputmode="decimal" data-k="other"></div>
-      <div class="field"><label for="sv-saving">ออมเดือนละ</label><input id="sv-saving" type="number" inputmode="decimal" data-k="saving"></div>
-      <div class="field"><label for="sv-current">เงินออมตอนเริ่ม</label><input id="sv-current" type="number" inputmode="decimal" data-k="current"></div>
-      <div class="field"><label for="sv-months">เป้าเงินสำรอง (กี่เดือน)</label><input id="sv-months" type="number" inputmode="numeric" min="1" max="12" data-k="months"></div>
+
+    <div class="card">
+      <div class="card-head"><h2>ใช้ไปแต่ละวันในรอบนี้</h2></div>
+      <div class="chart" id="chart"></div>
+      <div class="legend" id="chartLegend"></div>
+      <p class="note">จุดสีส้มเหนือแท่ง = วันที่ใช้เกินงบเฉลี่ย · แตะแท่งเพื่อดูยอดแต่ละหมวด</p>
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <h3>เงินแต่ละเดือนไปไหน</h3>
-      <div class="alloc" id="alloc" role="img" aria-label="สัดส่วนการใช้เงินต่อเดือน"></div>
+
+    <div class="card">
+      <div class="card-head"><h2>รายการในรอบนี้</h2></div>
+      <div id="list"></div>
+    </div>
+  </section>
+
+  <!-- ============ รายเดือน ============ -->
+  <section class="view" id="view-month" hidden aria-labelledby="monthTitle">
+    <div class="topbar"><div><p class="sub">รายรับ − รายจ่ายประจำ − เงินออม = งบใช้จ่าย</p><h1 id="monthTitle">งบรายเดือน</h1></div></div>
+
+    <div class="card">
+      <div class="flow" id="flow"></div>
+      <div class="alloc" id="alloc" role="img" aria-label="สัดส่วนเงินแต่ละเดือน"></div>
       <div class="legend" id="allocLegend"></div>
+      <div class="callout" id="flowNote"></div>
     </div>
-    <div class="stats" style="border-top:none;padding-top:0">
-      <div class="stat"><b id="svTarget">0</b><span>เป้าเงินสำรอง (บาท)</span></div>
-      <div class="stat"><b id="svWhen">-</b><span>ถึงเป้าเมื่อ</span></div>
-      <div class="stat"><b id="svRate">0%</b><span>เงินออมต่อรายได้</span></div>
+
+    <div class="card">
+      <div class="card-head"><h2>รายรับต่อเดือน</h2><span class="total num" id="incTotal"></span></div>
+      <div class="elist" id="incList"></div>
+      <button type="button" class="ghost" data-addrow="incomes">+ เพิ่มรายรับ</button>
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <h3>เงินออมสะสม 24 เดือน</h3>
+
+    <div class="card">
+      <div class="card-head"><h2>รายจ่ายประจำทุกเดือน</h2><span class="total num" id="billTotal"></span></div>
+      <p class="note">เช่น ค่าห้อง ค่ารถ บัตรเครดิต ประกัน ค่าโทรศัพท์ ค่าเน็ต แก้ชื่อหรือจำนวนได้ทันที</p>
+      <div class="elist" id="billList"></div>
+      <button type="button" class="ghost" data-addrow="bills">+ เพิ่มรายจ่ายประจำ</button>
+    </div>
+  </section>
+
+  <!-- ============ เงินออม ============ -->
+  <section class="view" id="view-save" hidden aria-labelledby="saveTitle">
+    <div class="topbar"><div><p class="sub">แยกจากเงินใช้จ่าย ไม่นับในงบรายวัน</p><h1 id="saveTitle">เงินออม</h1></div></div>
+
+    <div class="card hero save">
+      <div class="hero-top">
+        <div><p class="lbl">เงินออมสะสมตอนนี้</p><div class="big" id="svBalance">0<small>บาท</small></div></div>
+        <span class="pill" id="svPill">เงินสำรองฉุกเฉิน</span>
+      </div>
+      <div>
+        <div class="meter"><div id="svMeter" style="width:0"></div></div>
+        <div class="meter-row" style="margin-top:4px"><span id="svMeterL"></span><span id="svMeterR"></span></div>
+      </div>
+      <div class="hero-stats">
+        <div><b id="svMonthly">0</b><span>ออมต่อเดือน</span></div>
+        <div><b id="svWhen">-</b><span>ถึงเป้าเมื่อ</span></div>
+        <div><b id="svRate">0%</b><span>ของรายได้</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>บันทึกการออม</h2></div>
+      <div class="seg" role="radiogroup" aria-label="ประเภทการออม">
+        <label><input type="radio" name="svkind" id="sv-in" value="in" checked><span>ฝากเพิ่ม</span></label>
+        <label><input type="radio" name="svkind" id="sv-out" value="out"><span>ถอนออก</span></label>
+      </div>
+      <form id="saveForm" novalidate>
+        <div class="row">
+          <div class="field"><label for="svAmount">จำนวนเงิน (บาท)</label><input id="svAmount" class="amt-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0"></div>
+          <div class="field"><label for="svDate">วันที่</label><input id="svDate" type="date"></div>
+        </div>
+        <div class="field"><label for="svNote">หมายเหตุ (ไม่ใส่ก็ได้)</label><input id="svNote" type="text" maxlength="80" placeholder="เช่น ออมประจำเดือน"></div>
+        <div class="row"><button type="submit" class="save-btn" id="svBtn">บันทึกเงินฝาก</button><button type="button" id="svQuick"></button></div>
+      </form>
+      <div id="saveLog"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>แผนออม</h2></div>
+      <div class="save-grid">
+        <div class="field"><label for="pl-saving">ออมเดือนละ (หักจากงบอัตโนมัติ)</label><input id="pl-saving" type="number" inputmode="decimal" min="0" data-plan="saving"></div>
+        <div class="field"><label for="pl-savedStart">เงินออมตั้งต้น</label><input id="pl-savedStart" type="number" inputmode="decimal" min="0" data-plan="savedStart"></div>
+        <div class="field"><label for="pl-months">เป้าเงินสำรอง (กี่เดือนของรายจ่าย)</label><input id="pl-months" type="number" inputmode="numeric" min="1" max="12" data-plan="months"></div>
+      </div>
+      <h3>คาดการณ์ 24 เดือน</h3>
       <div class="chart" id="savChart"></div>
+      <div style="overflow-x:auto"><table class="mile"><thead><tr><th>เป้าหมาย</th><th>จำนวน</th><th>ถึงเมื่อ</th></tr></thead><tbody id="mileBody"></tbody></table></div>
     </div>
-    <div style="overflow-x:auto"><table class="mile"><thead><tr><th>เป้าหมาย</th><th>จำนวน</th><th>ถึงเมื่อ</th></tr></thead><tbody id="mileBody"></tbody></table></div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <h3>ข้อแนะนำจากตัวเลขตอนนี้</h3>
+
+    <div class="card">
+      <h2>ข้อแนะนำจากตัวเลขตอนนี้</h2>
       <ul class="tips" id="tips"></ul>
     </div>
   </section>
 
-  <section class="panel" aria-labelledby="bakH">
-    <h2 id="bakH">สำรองข้อมูล</h2>
-    <p class="muted">ข้อมูลอยู่ในมือถือเครื่องนี้เท่านั้น ถ้าล้างข้อมูล Chrome หรือเปลี่ยนเครื่อง ข้อมูลจะหาย ควรสำรองเป็นไฟล์เดือนละครั้ง</p>
-    <div class="row">
-      <button type="button" class="primary" id="exportBtn">ดาวน์โหลดไฟล์สำรอง</button>
-      <label class="pickbtn" style="background:var(--bg);color:var(--fg);border:1px solid var(--line);padding:11px 16px;font-weight:500">นำเข้าไฟล์สำรอง<input id="importFile" type="file" accept="application/json,.json" aria-label="นำเข้าไฟล์สำรอง"></label>
+  <!-- ============ ตั้งค่า ============ -->
+  <section class="view" id="view-set" hidden aria-labelledby="setTitle">
+    <div class="topbar"><div><p class="sub" id="storeNote"></p><h1 id="setTitle">ตั้งค่า</h1></div></div>
+
+    <div class="card">
+      <h2>รอบงบ</h2>
+      <label class="chk"><input type="checkbox" id="autoPay" checked> <span>สร้างรอบงบใหม่อัตโนมัติเมื่อเงินเดือนออก (ข้าราชการ รับก้อนเดียว งวดที่ 2)</span></label>
+      <div class="note">วันเงินเดือนเข้าครั้งถัดไป<ul class="paylist" id="payList"></ul></div>
+      <p class="note">งบ "อัตโนมัติ" คำนวณจากหน้างบรายเดือน ถ้าต้องการกำหนดเองเฉพาะรอบ เลือก "ตั้งเอง" แล้วใส่จำนวน</p>
+      <div class="plist" id="pBody"></div>
+      <div class="row"><button type="button" id="pAdd">เพิ่มรอบ</button><button type="button" class="primary" id="pSave">บันทึกรอบงบ</button></div>
     </div>
+    <div class="card">
+      <h2>สำรองข้อมูล</h2>
+      <p class="muted" style="font-size:.9rem">ข้อมูลอยู่ในมือถือเครื่องนี้เท่านั้น ถ้าล้างข้อมูล Chrome หรือเปลี่ยนเครื่อง ข้อมูลจะหาย ควรสำรองเป็นไฟล์เดือนละครั้ง</p>
+      <div class="row">
+        <button type="button" class="primary" id="exportBtn">ดาวน์โหลดไฟล์สำรอง</button>
+        <label class="pickbtn alt">นำเข้าไฟล์สำรอง<input id="importFile" type="file" accept="application/json,.json" aria-label="นำเข้าไฟล์สำรอง"></label>
+      </div>
+    </div>
+
   </section>
 </div>
+
+<nav class="tabbar" aria-label="เมนูหลัก">
+  <div class="tabbar-in" role="tablist">
+    <button type="button" class="tab" role="tab" data-tab="today" aria-selected="true"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg></span>วันนี้</button>
+    <button type="button" class="tab" role="tab" data-tab="month" aria-selected="false"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>รายเดือน</button>
+    <button type="button" class="tab" role="tab" data-tab="save" aria-selected="false"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 9a7 6 0 1 0-12.9 3.2c.5 1 .9 1.8.9 2.8V18h3v-2h4v2h3v-3c1.3-.8 2-2 2-3.5"/><path d="M15 9h.01M5 7 3 5"/></svg></span>เงินออม</button>
+    <button type="button" class="tab" role="tab" data-tab="set" aria-selected="false"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span>ตั้งค่า</button>
+  </div>
+</nav>
 <div class="toast" id="toast" hidden></div>
 <script src="app.js"></script>
 </body>
