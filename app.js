@@ -9,7 +9,9 @@ const DEFAULT_PERIODS = [
 const DEFAULT_SAV = {income:22184, car:5000, fixed:8061, food:300, other:2000, saving:3000, current:1000, months:3};
 const FIXED_CAT = 'ค่าใช้จ่ายประจำ';
 const CATS = ['อาหาร','เดินทาง','ของใช้','อื่นๆ',FIXED_CAT];
-const countable = e => e.cat !== FIXED_CAT;
+const INCOME_CAT = 'รายรับ';
+const isIncome = e => e.cat === INCOME_CAT;
+const countable = e => e.cat !== FIXED_CAT && e.cat !== INCOME_CAT;
 const LS = 'slip-ledger-v1';
 const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
@@ -68,38 +70,40 @@ function render(){
   const spent = sum(inB);
   const before = sum(inB.filter(e => dnum(e.date) < eff));
   const todaySpent = sum(inB.filter(e => dnum(e.date) === eff));
+  const extra = sum(inP.filter(e => isIncome(e) && dnum(e.date) <= eff));
+  const budget = (Number(p.budget)||0) + extra;
   const daysLeft = pe-eff+1;
-  const allowance = (p.budget-before)/daysLeft;
+  const allowance = (budget-before)/daysLeft;
   const left = allowance-todaySpent;
 
-  $('periodName').textContent = (p.name||'งบรอบนี้')+' · '+fmtD(p.start)+' – '+fmtD(p.end)+' · งบ '+fmt0(p.budget)+' บาท';
-  $('leftToday').innerHTML = esc(fmt0(ended ? p.budget-spent : left))+'<small>บาท</small>';
+  $('periodName').textContent = (p.name||'งบรอบนี้')+' · '+fmtD(p.start)+' – '+fmtD(p.end)+' · งบ '+fmt0(p.budget)+' บาท'+(extra ? ' + รายรับเพิ่ม '+fmt0(extra)+' = '+fmt0(budget)+' บาท' : '');
+  $('leftToday').innerHTML = esc(fmt0(ended ? budget-spent : left))+'<small>บาท</small>';
   $('todayH').textContent = ended ? 'รอบนี้จบแล้ว เหลือเงิน' : (tn < ps ? 'วันแรกของรอบใช้ได้' : 'วันนี้ยังใช้ได้อีก');
   $('todayLine').textContent = ended ? 'เพิ่มรอบถัดไปได้ที่ "ตั้งค่ารอบงบ" ด้านล่าง'
     : 'งบวันนี้ '+fmt(allowance)+' บาท · ใช้ไปแล้ว '+fmt(todaySpent)+' บาท';
   let cls = 'good', txt = 'อยู่ในงบ';
-  if(p.budget-spent <= 0){cls = 'bad'; txt = 'งบรอบนี้หมดแล้ว';}
+  if(budget-spent <= 0){cls = 'bad'; txt = 'งบรอบนี้หมดแล้ว';}
   else if(left < 0){cls = 'bad'; txt = 'เกินงบวันนี้ '+fmt0(-left)+' บาท';}
   else if(left < allowance*0.25){cls = 'warn'; txt = 'ใกล้หมดงบวันนี้';}
-  if(ended){cls = p.budget-spent >= 0 ? 'good' : 'bad'; txt = p.budget-spent >= 0 ? 'จบรอบในงบ' : 'จบรอบเกินงบ';}
+  if(ended){cls = budget-spent >= 0 ? 'good' : 'bad'; txt = budget-spent >= 0 ? 'จบรอบในงบ' : 'จบรอบเกินงบ';}
   const pill = $('statusPill'); pill.className = 'pill '+cls; pill.textContent = txt;
-  $('sRemain').textContent = fmt0(p.budget-spent);
+  $('sRemain').textContent = fmt0(budget-spent);
   $('sDays').textContent = ended ? 0 : daysLeft;
   $('sSpent').textContent = fmt0(spent);
-  renderChart(p, inB, ps, total, tn);
+  renderChart(p, inB, ps, total, tn, budget);
   renderList(inP);
 }
 
 const CAT_COLORS = {'อาหาร':'var(--c1)', 'เดินทาง':'var(--c2)', 'ของใช้':'var(--c3)', 'อื่นๆ':'var(--c4)'};
 const BUD_CATS = CATS.filter(c => c !== FIXED_CAT);
-function renderChart(p, inB, ps, total, tn){
+function renderChart(p, inB, ps, total, tn, budget){
   const by = {}, catTot = {};
   BUD_CATS.forEach(c => catTot[c] = 0);
   inB.forEach(e => {
     const c = BUD_CATS.includes(e.cat) ? e.cat : 'อื่นๆ', a = Number(e.amount)||0;
     (by[e.date] = by[e.date] || {})[c] = (by[e.date][c]||0) + a; catTot[c] += a;
   });
-  const avg = p.budget/total;
+  const avg = (budget ?? p.budget)/total;
   const days = [...Array(total)].map((_,i) => by[fromNum(ps+i)] || {});
   const vals = days.map(d => BUD_CATS.reduce((t,c) => t + (d[c]||0), 0));
   const max = Math.max(avg*1.6, ...vals) || 1;
@@ -145,9 +149,10 @@ function renderList(inP){
   const groups = {}; inP.forEach(e => (groups[e.date] = groups[e.date] || []).push(e));
   el.innerHTML = Object.keys(groups).sort().reverse().map(d => {
     const items = groups[d].sort(byWhen);
-    const fixedSum = sum(items.filter(e => !countable(e)));
-    return '<div class="day"><div class="day-head"><span>'+esc(fmtD(d))+'</span><span class="num">นับงบ '+fmt(sum(items.filter(countable)))+' บาท'+(fixedSum ? ' · ประจำ '+fmt(fixedSum) : '')+'</span></div>'+
-      items.map(e => '<div class="entry'+(countable(e) ? '' : ' fixed')+'"><span class="tag">'+esc(e.cat||'อื่นๆ')+'</span><span class="what">'+(isTime(e.time) ? '<span class="t">'+esc(e.time)+'</span>' : '')+esc(e.note||'')+'</span><span class="amt">'+fmt(e.amount)+'</span>'+
+    const fixedSum = sum(items.filter(e => e.cat === FIXED_CAT));
+    const incSum = sum(items.filter(isIncome));
+    return '<div class="day"><div class="day-head"><span>'+esc(fmtD(d))+'</span><span class="num">นับงบ '+fmt(sum(items.filter(countable)))+' บาท'+(fixedSum ? ' · ประจำ '+fmt(fixedSum) : '')+(incSum ? ' · รายรับ +'+fmt(incSum) : '')+'</span></div>'+
+      items.map(e => '<div class="entry'+(isIncome(e) ? ' income' : (countable(e) ? '' : ' fixed'))+'"><span class="tag">'+esc(e.cat||'อื่นๆ')+'</span><span class="what">'+(isTime(e.time) ? '<span class="t">'+esc(e.time)+'</span>' : '')+esc(e.note||'')+'</span><span class="amt">'+(isIncome(e) ? '+' : '')+fmt(e.amount)+'</span>'+
         '<button type="button" class="link'+(pendingDel.has(e.id) ? ' confirm' : '')+'" data-del="'+esc(e.id)+'">'+(pendingDel.has(e.id) ? 'ยืนยันลบ' : 'ลบ')+'</button></div>').join('')+'</div>';
   }).join('');
 }
@@ -165,14 +170,22 @@ $('list').addEventListener('click', ev => {
 $('catChips').innerHTML = CATS.map((c,i) => '<label class="chip"><input type="radio" name="cat" id="cat-'+i+'" value="'+esc(c)+'"'+(i === 0 ? ' checked' : '')+'><span>'+esc(c)+'</span></label>').join('');
 $('date').value = todayStr();
 $('time').value = nowTime();
+const kindIn = () => document.querySelector('input[name=kind]:checked').value === 'in';
+function syncKind(){
+  const inc = kindIn();
+  $('catField').hidden = inc; $('incNote').hidden = !inc;
+  $('note').placeholder = inc ? 'เช่น งานเสริม ค่าเช่ารถ' : 'เช่น ข้าวกลางวัน';
+  $('addBtn').textContent = inc ? 'บันทึกรายรับ' : 'บันทึกรายจ่าย';
+}
+document.querySelectorAll('input[name=kind]').forEach(r => r.addEventListener('change', syncKind));
 $('addForm').addEventListener('submit', ev => {
   ev.preventDefault();
   const amount = parseFloat($('amount').value);
   if(!(amount > 0)){toast('ใส่จำนวนเงินที่มากกว่า 0'); $('amount').focus(); return;}
   const entry = {id:newId(), date:$('date').value || todayStr(), time:isTime($('time').value) ? $('time').value : '', amount:Math.round(amount*100)/100,
-    cat:document.querySelector('input[name=cat]:checked').value, note:$('note').value.trim(), createdAt:Date.now()};
+    cat:kindIn() ? INCOME_CAT : document.querySelector('input[name=cat]:checked').value, note:$('note').value.trim(), createdAt:Date.now()};
   state.expenses.push(entry);
-  if(save()){$('amount').value = ''; $('note').value = ''; $('time').value = nowTime(); render(); toast('บันทึกแล้ว '+fmt(entry.amount)+' บาท');}
+  if(save()){$('amount').value = ''; $('note').value = ''; $('time').value = nowTime(); render(); toast(isIncome(entry) ? 'บันทึกรายรับ +'+fmt(entry.amount)+' บาท งบรอบนี้เพิ่มแล้ว' : 'บันทึกแล้ว '+fmt(entry.amount)+' บาท');}
 });
 
 /* ---------- Slip reading (on-device OCR) ---------- */
@@ -332,7 +345,8 @@ $('impRead').addEventListener('click', async () => {
       r.missing = !(r.amount > 0);
       if(r.missing) r.amount = 0;
       r.dup = !r.missing && isDup(r);
-      r.include = !r.missing && !r.incoming && !r.dup;
+      if(r.incoming) r.cat = INCOME_CAT;
+      r.include = !r.missing && !r.dup;
       importRows.push(r); if(!r.missing) found++;
       renderImport();
     }
@@ -352,11 +366,11 @@ $('impRead').addEventListener('click', async () => {
 function renderImport(){
   $('impActions').hidden = !importRows.length;
   $('impList').innerHTML = importRows.map((r,i) => {
-    const opts = CATS.map(c => '<option'+(c === r.cat ? ' selected' : '')+'>'+esc(c)+'</option>').join('');
+    const opts = CATS.concat(INCOME_CAT).map(c => '<option'+(c === r.cat ? ' selected' : '')+'>'+esc(c)+'</option>').join('');
     const badges = (r.missing ? '<span class="badge warn">หาจำนวนเงินไม่เจอ กรอกเองแล้วติ๊กเลือก</span>' : '')+
       (!r.dateFound ? '<span class="badge warn">หาวันที่ไม่เจอ ใส่วันนี้ไว้ก่อน</span>' : '')+
       (!r.time ? '<span class="badge info">หาเวลาไม่เจอ ใส่เองได้</span>' : '')+
-      (r.incoming ? '<span class="badge info">อาจเป็นเงินเข้า</span>' : '')+
+      (r.incoming ? '<span class="badge info">อาจเป็นเงินเข้า ตั้งหมวดเป็นรายรับไว้ให้</span>' : '')+
       (r.dup ? '<span class="badge warn">อาจซ้ำกับรายการที่จดแล้ว</span>' : '');
     return '<div class="imp-row'+(r.include ? '' : ' off')+'"><input type="checkbox" id="imp'+i+'-inc" data-ii="'+i+'" data-if="include" aria-label="เลือกรายการนี้"'+(r.include ? ' checked' : '')+'>'+
       '<img alt="สลิป" src="'+r.thumb+'">'+
@@ -389,7 +403,7 @@ $('impList').addEventListener('change', ev => {
 $('impClear').addEventListener('click', () => {importRows.forEach(r => {if(r.thumb) URL.revokeObjectURL(r.thumb);}); importRows = []; $('impStatus').textContent = ''; renderImport();});
 function toEntry(r){
   return {id:newId(), date:isDate(r.date) ? r.date : todayStr(), time:isTime(r.time) ? r.time : '', amount:r.amount,
-    cat:CATS.includes(r.cat) ? r.cat : 'อื่นๆ', note:String(r.note||'').slice(0,80), createdAt:Date.now(), source:'slip'};
+    cat:(CATS.includes(r.cat) || r.cat === INCOME_CAT) ? r.cat : 'อื่นๆ', note:String(r.note||'').slice(0,80), createdAt:Date.now(), source:'slip'};
 }
 $('impSave').addEventListener('click', () => {
   const pick = importRows.filter(r => r.include && r.amount > 0);
