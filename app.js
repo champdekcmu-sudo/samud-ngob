@@ -51,7 +51,11 @@ function planFromLegacy(s){
   };
 }
 function normPlan(p){
-  const list = a => Array.isArray(a) ? a.filter(x => x && typeof x === 'object').map(x => ({id:String(x.id||newId()), name:String(x.name||'').slice(0,60), amount:Math.max(0, Number(x.amount)||0)})) : [];
+  const list = a => Array.isArray(a) ? a.filter(x => x && typeof x === 'object').map(x => {
+    const o = {id:String(x.id||newId()), name:String(x.name||'').slice(0,60), amount:Math.max(0, Number(x.amount)||0)};
+    if(x.inst){o.inst = true; o.total = Math.max(0, Number(x.total)||0); o.n = Math.min(360, Math.max(1, Math.round(Number(x.n)||1))); o.start = /^\d{4}-\d{2}$/.test(x.start) ? x.start : thisMonth();}
+    return o;
+  }) : [];
   return {incomes:list(p.incomes), bills:list(p.bills), saving:Math.max(0, Number(p.saving)||0), savedStart:Math.max(0, Number(p.savedStart)||0), months:Math.min(24, Math.max(1, Number(p.months)||3))};
 }
 // Periods saved by older versions have a budget but no mode: keep them as hand-set budgets.
@@ -64,8 +68,24 @@ function normPeriods(list){
 }
 
 /* ---------- Budget math ---------- */
+/* Installment bills: total ÷ number of installments, counted only in the months they run */
+const thisMonth = () => todayStr().slice(0,7);
+const monthIdx = s => {const [y,m] = s.split('-').map(Number); return y*12+m-1;};
+const idxLabel = i => TH_M[i%12]+' '+String(Math.floor(i/12)+543).slice(2);
+function instInfo(b){
+  const s = monthIdx(b.start), k = monthIdx(thisMonth())-s+1, n = b.n||1;
+  const per = Math.round((Number(b.total)||0)/n*100)/100;
+  return {per, k, n, active:k >= 1 && k <= n, done:k > n, notYet:k < 1, left:Math.max(0, n-Math.max(k,0)), startLabel:idxLabel(s), endLabel:idxLabel(s+n-1)};
+}
+const billMonthly = b => b.inst ? (instInfo(b).active ? instInfo(b).per : 0) : (Number(b.amount)||0);
+function instSummary(b){
+  const i = instInfo(b);
+  if(i.notYet) return 'เดือนละ '+fmt(i.per)+' · เริ่ม '+i.startLabel+' จบ '+i.endLabel+' (ยังไม่นับเดือนนี้)';
+  if(i.done) return 'ผ่อนครบ '+i.n+' งวดแล้ว ('+i.endLabel+') ไม่นับในงบแล้ว ลบรายการนี้ได้';
+  return 'เดือนละ '+fmt(i.per)+' · งวดที่ '+i.k+'/'+i.n+' · เหลือ '+(i.n-i.k)+' งวด · จบ '+i.endLabel;
+}
 function planTotals(){
-  const p = state.plan, inc = sum(p.incomes), bills = sum(p.bills), saving = Number(p.saving)||0;
+  const p = state.plan, inc = sum(p.incomes), bills = p.bills.reduce((t,b) => t + billMonthly(b), 0), saving = Number(p.saving)||0;
   return {inc, bills, saving, spend:inc-bills-saving};
 }
 const periodBudget = p => p.mode === 'auto' ? planTotals().spend : (Number(p.budget)||0);
@@ -371,9 +391,22 @@ $('impSave').addEventListener('click', async () => {
 
 /* ---------- Monthly plan ---------- */
 function rowHtml(kind, x){
-  return '<div class="erow"><input type="text" maxlength="60" id="'+kind+'-'+esc(x.id)+'-name" aria-label="ชื่อรายการ" placeholder="ชื่อรายการ" data-plk="'+kind+'" data-plid="'+esc(x.id)+'" data-plf="name" value="'+esc(x.name)+'"'+(Store.readOnly ? ' disabled' : '')+'>'+
-    '<input type="number" inputmode="decimal" min="0" id="'+kind+'-'+esc(x.id)+'-amt" aria-label="จำนวนเงินต่อเดือน" placeholder="0" data-plk="'+kind+'" data-plid="'+esc(x.id)+'" data-plf="amount" value="'+(x.amount || '')+'"'+(Store.readOnly ? ' disabled' : '')+'>'+
-    delBtn(kind, x.id)+'</div>';
+  const ro = Store.readOnly ? ' disabled' : '', id = esc(x.id), at = ' data-plk="'+kind+'" data-plid="'+id+'"';
+  const inst = kind === 'bills' && x.inst;
+  let h = '<div class="erow'+(inst ? ' inst' : '')+'"><input type="text" maxlength="60" id="'+kind+'-'+id+'-name" aria-label="ชื่อรายการ" placeholder="ชื่อรายการ"'+at+' data-plf="name" value="'+esc(x.name)+'"'+ro+'>'+
+    (inst ? '<span class="permo num" id="bills-'+id+'-per" aria-label="ต่อเดือน">'+fmt(billMonthly(x))+'</span>'
+      : '<input type="number" inputmode="decimal" min="0" id="'+kind+'-'+id+'-amt" aria-label="จำนวนเงินต่อเดือน" placeholder="0"'+at+' data-plf="amount" value="'+(x.amount || '')+'"'+ro+'>')+
+    delBtn(kind, x.id);
+  if(kind === 'bills'){
+    h += '<div class="erow-sub">';
+    if(inst) h += '<div class="inst-grid">'+
+      '<div class="field"><label for="bills-'+id+'-total">ยอดรวมทั้งหมด</label><input type="number" inputmode="decimal" min="0" id="bills-'+id+'-total"'+at+' data-plf="total" value="'+(x.total || '')+'"'+ro+'></div>'+
+      '<div class="field"><label for="bills-'+id+'-n">จำนวนงวด</label><input type="number" inputmode="numeric" min="1" max="360" id="bills-'+id+'-n"'+at+' data-plf="n" value="'+(x.n || '')+'"'+ro+'></div>'+
+      '<div class="field"><label for="bills-'+id+'-start">งวดแรก</label><input type="month" id="bills-'+id+'-start"'+at+' data-plf="start" value="'+esc(x.start)+'"'+ro+'></div>'+
+      '</div><p class="inst-sum" id="bills-'+id+'-sum">'+esc(instSummary(x))+'</p>';
+    h += '<label class="chk small"><input type="checkbox" data-inst="'+id+'"'+(inst ? ' checked' : '')+ro+'> <span>ผ่อนเป็นงวด (ใส่ยอดรวมและจำนวนงวด)</span></label></div>';
+  }
+  return h+'</div>';
 }
 function renderPlanLists(){
   const p = state.plan;
@@ -384,6 +417,9 @@ function renderMonth(){
   const t = planTotals(), p = currentPeriod();
   $('incTotal').textContent = fmt0(t.inc)+' บาท';
   $('billTotal').textContent = fmt0(t.bills)+' บาท';
+  const act = state.plan.bills.filter(b => b.inst && instInfo(b).active).map(b => ({b, i:instInfo(b)})).sort((a,c) => (a.i.n-a.i.k)-(c.i.n-c.i.k));
+  $('billNote').hidden = !act.length;
+  if(act.length){const f = act[0]; $('billNote').textContent = 'ผ่อนอยู่ '+act.length+' รายการ รวมเดือนละ '+fmt0(act.reduce((s,a) => s+a.i.per, 0))+' บาท · "'+(f.b.name||'ไม่มีชื่อ')+'" จบเร็วที่สุด ('+f.i.endLabel+') หลังจากนั้นงบใช้จ่ายจะเพิ่มเดือนละ '+fmt0(f.i.per)+' บาท';}
   $('flow').innerHTML =
     '<div class="flow-row"><span>รายรับต่อเดือน</span><span class="v">'+fmt0(t.inc)+'</span></div>'+
     '<div class="flow-row minus"><span>− รายจ่ายประจำ</span><span class="v">'+fmt0(t.bills)+'</span></div>'+
@@ -405,13 +441,29 @@ document.addEventListener('input', ev => {
   const t = ev.target;
   if(t.dataset.plk){
     const x = state.plan[t.dataset.plk].find(r => r.id === t.dataset.plid); if(!x) return;
-    if(t.dataset.plf === 'amount') x.amount = Math.max(0, parseFloat(t.value)||0); else x.name = t.value.slice(0,60);
+    const f = t.dataset.plf;
+    if(f === 'amount' || f === 'total') x[f] = Math.max(0, parseFloat(t.value)||0);
+    else if(f === 'n') x.n = Math.min(360, Math.max(1, Math.round(parseFloat(t.value)||1)));
+    else if(f === 'start'){if(/^\d{4}-\d{2}$/.test(t.value)) x.start = t.value; else return;}
+    else x.name = t.value.slice(0,60);
+    if(x.inst){const per = $('bills-'+x.id+'-per'), s = $('bills-'+x.id+'-sum'); if(per) per.textContent = fmt(billMonthly(x)); if(s) s.textContent = instSummary(x);}
     renderAll(true); schedulePlanSave();
   } else if(t.dataset.plan){
     const v = parseFloat(t.value);
     state.plan[t.dataset.plan] = t.dataset.plan === 'months' ? Math.min(24, Math.max(1, v||1)) : Math.max(0, v||0);
     renderAll(true); schedulePlanSave();
   }
+});
+document.addEventListener('change', ev => {
+  const t = ev.target; if(!t.dataset.inst || Store.readOnly) return;
+  const x = state.plan.bills.find(r => r.id === t.dataset.inst); if(!x) return;
+  if(t.checked){
+    x.inst = true;
+    if(!x.total){x.n = x.n || 12; x.total = Math.round((Number(x.amount)||0)*x.n*100)/100;}
+    x.n = x.n || 12; x.start = x.start || thisMonth();
+  } else {x.amount = billMonthly(x) || Number(x.amount) || 0; delete x.inst;}
+  renderPlanLists(); renderAll(true); schedulePlanSave();
+  const f = $('bills-'+x.id+(x.inst ? '-total' : '-amt')); if(f) f.focus();
 });
 document.addEventListener('click', ev => {
   const b = ev.target.closest('[data-addrow]'); if(!b || Store.readOnly) return;

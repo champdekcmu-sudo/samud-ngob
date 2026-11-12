@@ -136,6 +136,14 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .erow:last-child{border-bottom:none}
 .erow input{padding:9px 10px}
 .erow input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
+.erow .permo{text-align:right;font-weight:600;padding:9px 10px;font-variant-numeric:tabular-nums}
+.erow-sub{grid-column:1/-1;display:flex;flex-direction:column;gap:6px}
+.erow.inst{background:var(--surface-2);margin:4px -8px;padding:8px;border-radius:12px;border-bottom:none}
+.inst-grid{display:grid;grid-template-columns:1fr 80px 1fr;gap:8px}
+.inst-grid input{background:var(--surface)}
+.inst-sum{font-size:.82rem;color:var(--accent);font-weight:500}
+.chk.small{font-size:.82rem;color:var(--muted);gap:8px}
+.chk.small input{width:18px;height:18px;margin-top:1px}
 .sumline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0 0;border-top:1px solid var(--line);font-weight:600}
 .sumline b{font-family:var(--display);font-variant-numeric:tabular-nums;font-size:1.1rem}
 
@@ -339,8 +347,9 @@ textarea{resize:none;min-height:52px}
 
     <div class="card">
       <div class="card-head"><h2>รายจ่ายประจำทุกเดือน</h2><span class="total num" id="billTotal"></span></div>
-      <p class="note">เช่น ค่าห้อง ค่ารถ บัตรเครดิต ประกัน ค่าโทรศัพท์ ค่าเน็ต แก้ชื่อหรือจำนวนได้ทันที</p>
+      <p class="note">เช่น ค่าห้อง บัตรเครดิต ประกัน ค่าโทรศัพท์ ค่าเน็ต ถ้าเป็นการผ่อน ติ๊ก "ผ่อนเป็นงวด" แล้วใส่ยอดรวมกับจำนวนงวด แอปจะหารเป็นต่อเดือนให้ และเลิกนับเมื่อผ่อนครบ</p>
       <div class="elist" id="billList"></div>
+      <div class="callout" id="billNote" hidden></div>
       <button type="button" class="ghost" data-addrow="bills">+ เพิ่มรายจ่ายประจำ</button>
     </div>
   </section>
